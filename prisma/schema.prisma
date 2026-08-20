@@ -1,0 +1,410 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  IN_PRODUCTION
+  INSPECTION
+  APPROVED
+  DISPATCHED
+  DELIVERED
+}
+
+enum DeliveryLocation {
+  ITALY
+  NIGERIA
+}
+
+enum Language {
+  EN
+  IT
+}
+
+enum Currency {
+  NGN
+  EUR
+}
+
+enum PaymentGateway {
+  PAYSTACK
+  STRIPE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReferralRewardType {
+  DISCOUNT_PERCENT
+  FREE_ITEM
+  PRIORITY_SLOT
+}
+
+enum ReferralRewardStatus {
+  PENDING
+  CREDITED
+  REDEEMED
+}
+
+enum UserRole {
+  ADMIN
+  TAILOR
+}
+
+enum SubscriptionStatus {
+  INACTIVE
+  ACTIVE
+  CANCELLED
+  PAUSED
+}
+
+enum SubscriptionTierEnum {
+  STANDARD
+  PRIORITY
+  VIP
+}
+
+enum DesignCategory {
+  NATIVE_WEAR
+  ENGLISH_SUIT
+  CASUAL
+  CHILDRENS
+}
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+  SCHEDULED
+}
+
+// ─── MODELS ───────────────────────────────────────────────────────────────────
+
+model Customer {
+  id               String    @id @default(cuid())
+  name             String
+  email            String?   @unique
+  phone            String    @unique
+  whatsapp         String?
+  preferredLang    Language  @default(EN)
+  preferredCurrency Currency @default(NGN)
+  deliveryLocation DeliveryLocation?
+  deliveryAddress  String?
+  adminNotes       String?
+
+  // Subscription provision — dormant at launch
+  subscriptionStatus SubscriptionStatus @default(INACTIVE)
+  subscriptionTierId String?
+  subscriptionTier   SubscriptionTier?  @relation(fields: [subscriptionTierId], references: [id])
+
+  measurements  Measurement?
+  orders        Order[]
+  reviews       Review[]
+  referralsSent Referral[]   @relation("ReferrerCustomer")
+  referredBy    Referral?    @relation("ReferredCustomer")
+  emailCaptures EmailCapture[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Measurement {
+  id         String   @id @default(cuid())
+  customerId String   @unique
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // All measurements in centimetres
+  chest      Float?
+  shoulder   Float?
+  sleeveLength Float?
+  waist      Float?
+  hips       Float?
+  inseam     Float?
+  neck       Float?
+  length     Float?   // full garment length
+  notes      String?  // e.g. "prefers slim fit, extra sleeve length"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id               String           @id @default(cuid())
+  orderNumber      String           @unique @default(cuid()) // human-readable ref
+  customerId       String
+  customer         Customer         @relation(fields: [customerId], references: [id])
+  designId         String?
+  design           Design?          @relation(fields: [designId], references: [id])
+  tailorId         String?
+  tailor           AdminUser?       @relation(fields: [tailorId], references: [id])
+
+  status           OrderStatus      @default(NEW)
+  deliveryLocation DeliveryLocation
+  deliveryAddress  String
+  occasion         String?
+  deadline         DateTime?
+  estimatedDelivery DateTime?
+
+  // Measurements snapshot at time of order (in case customer updates later)
+  measurementSnapshot Json?
+
+  // Custom design upload (if customer brings their own)
+  customDesignUrl  String?
+  customDesignNotes String?
+
+  // Fabric / colour preferences
+  fabricChoice     String?
+  colourChoice     String?
+  additionalNotes  String?
+
+  // Pricing
+  currency         Currency
+  totalAmount      Float
+  depositAmount    Float
+  balanceAmount    Float
+  depositPaid      Boolean  @default(false)
+  balancePaid      Boolean  @default(false)
+
+  // Inspection
+  inspectionMediaUrls String[]  // uploaded by tailor
+  inspectionApprovedAt DateTime?
+  inspectionNotes  String?
+
+  payments         Payment[]
+  review           Review?
+  notifications    OrderNotification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Design {
+  id           String         @id @default(cuid())
+  slug         String         @unique
+  category     DesignCategory
+  isFeatured   Boolean        @default(false)
+  isVisible    Boolean        @default(true)
+  sortOrder    Int            @default(0)
+  turnaroundDays Int
+
+  // Pricing
+  priceNGN     Float
+  priceEUR     Float
+
+  // Localised content (English)
+  nameEN       String
+  descriptionEN String
+  fabricOptionsEN String[]
+  colourOptionsEN String[]
+
+  // Localised content (Italian)
+  nameIT       String
+  descriptionIT String
+  fabricOptionsIT String[]
+  colourOptionsIT String[]
+
+  photos       DesignPhoto[]
+  orders       Order[]
+  reviews      Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DesignPhoto {
+  id       String @id @default(cuid())
+  designId String
+  design   Design @relation(fields: [designId], references: [id], onDelete: Cascade)
+  url      String
+  altText  String?
+  sortOrder Int   @default(0)
+
+  createdAt DateTime @default(now())
+}
+
+model Payment {
+  id         String         @id @default(cuid())
+  orderId    String
+  order      Order          @relation(fields: [orderId], references: [id])
+  gateway    PaymentGateway
+  status     PaymentStatus  @default(PENDING)
+  currency   Currency
+  amount     Float
+  reference  String         @unique  // gateway transaction ref
+  isDeposit  Boolean        @default(true)
+  paidAt     DateTime?
+  metadata   Json?          // raw gateway response
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Review {
+  id         String       @id @default(cuid())
+  customerId String
+  customer   Customer     @relation(fields: [customerId], references: [id])
+  orderId    String       @unique
+  order      Order        @relation(fields: [orderId], references: [id])
+  designId   String
+  design     Design       @relation(fields: [designId], references: [id])
+
+  status     ReviewStatus @default(PENDING)
+  rating     Int          // 1–5
+  comment    String?
+  photoUrls  String[]
+  moderatedAt DateTime?
+  moderatedBy String?     // AdminUser id
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Referral {
+  id               String               @id @default(cuid())
+  referrerId       String
+  referrer         Customer             @relation("ReferrerCustomer", fields: [referrerId], references: [id])
+  referredCustomerId String             @unique
+  referredCustomer Customer             @relation("ReferredCustomer", fields: [referredCustomerId], references: [id])
+
+  token            String               @unique
+  convertedOrderId String?              // set when referred customer places a paid order
+
+  // Referrer reward
+  referrerRewardType   ReferralRewardType?
+  referrerRewardStatus ReferralRewardStatus @default(PENDING)
+  referrerRewardValue  Float?              // e.g. 10 for 10% discount
+  referrerRedeemedAt   DateTime?
+
+  // Referred customer reward
+  referredRewardType   ReferralRewardType?
+  referredRewardStatus ReferralRewardStatus @default(PENDING)
+  referredRewardValue  Float?
+  referredRedeemedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         UserRole
+  isActive     Boolean   @default(true)
+  assignedOrders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BlogPost {
+  id          String         @id @default(cuid())
+  slug        String         @unique
+  status      BlogPostStatus @default(DRAFT)
+  publishedAt DateTime?
+  scheduledAt DateTime?
+  featuredImageUrl String?
+
+  // SEO
+  metaTitleEN    String?
+  metaDescEN     String?
+  metaTitleIT    String?
+  metaDescIT     String?
+
+  // English content
+  titleEN     String
+  excerptEN   String?
+  bodyEN      String         // rich text stored as HTML or JSON (TipTap)
+  tagsEN      String[]
+
+  // Italian content
+  titleIT     String?
+  excerptIT   String?
+  bodyIT      String?
+  tagsIT      String[]
+
+  category    String?
+  authorId    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EmailCapture {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  source     String?  // e.g. "homepage", "order_confirmation", "blog"
+  language   Language @default(EN)
+  isActive   Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+}
+
+model OrderNotification {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  channel   String   // "whatsapp" | "email"
+  type      String   // "order_confirmed" | "status_update" | "inspection_ready" | "review_request"
+  sentAt    DateTime @default(now())
+  success   Boolean
+  error     String?
+}
+
+// ─── SUBSCRIPTION PROVISION (dormant at launch) ───────────────────────────────
+
+model SubscriptionTier {
+  id          String           @id @default(cuid())
+  tier        SubscriptionTierEnum 
+  nameEN      String
+  nameIT      String
+  priceNGN    Float
+  priceEUR    Float
+  intervalDays Int
+  features    String[]
+  isActive    Boolean          @default(false) // stays false until feature flag enabled
+  customers   Customer[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── SETTINGS ────────────────────────────────────────────────────────────────
+
+model AppSettings {
+  id                  String  @id @default("singleton")  // single row
+  fxRateNGNToEUR      Float   @default(0.00055)
+  useLiveFxRate       Boolean @default(false)
+  depositPercent      Float   @default(50)
+  paystackPublicKey   String  @default("")
+  stripePublicKey     String  @default("")
+  whatsappNumber      String  @default("")
+  defaultTurnaroundDays Json  // { NATIVE_WEAR: 14, ENGLISH_SUIT: 21, ... }
+  subscriptionsEnabled Boolean @default(false) // feature flag
+
+  updatedAt DateTime @updatedAt
+}
