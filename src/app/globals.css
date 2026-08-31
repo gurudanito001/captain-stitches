@@ -1,26 +1,272 @@
 @import "tailwindcss";
 
+/* ─── Brand token definitions ─────────────────────────────────────────────── */
+/* Extracted from Norven-style reference: deep warm brown editorial palette    */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Core palette */
+  --color-brown-950: #110904;
+  --color-brown-900: #1C0F07;
+  --color-brown-800: #2C1810;
+  --color-brown-700: #3D2416;
+  --color-brown-600: #5C3820;
+  --color-brown-500: #7A4F2E;
+
+  --color-caramel-600: #9A7240;
+  --color-caramel-500: #C4975A;
+  --color-caramel-400: #D4AE7A;
+  --color-caramel-300: #E2C99E;
+  --color-caramel-100: #F5ECD9;
+
+  --color-cream-100: #FAF7F2;
+  --color-cream-200: #F2EDE6;
+  --color-cream-300: #E8E0D4;
+  --color-cream-400: #D4C9BA;
+
+  --color-stone-400: #8C7B6B;
+  --color-stone-300: #A8998C;
+  --color-stone-200: #C4B9AF;
+
+  /* Semantic aliases */
+  --background:        var(--color-brown-900);
+  --background-alt:    var(--color-brown-800);
+  --background-light:  var(--color-cream-100);
+  --foreground:        var(--color-cream-200);
+  --foreground-muted:  var(--color-stone-300);
+  --accent:            var(--color-caramel-500);
+  --accent-hover:      var(--color-caramel-400);
+  --accent-subtle:     var(--color-caramel-100);
+  --border-color:      var(--color-brown-700);
+  --border-light:      var(--color-cream-400);
+
+  /* Typography */
+  --font-display: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  --font-body:    var(--font-inter), 'Inter', system-ui, sans-serif;
+
+  /* Spacing rhythm */
+  --section-padding-y: 6rem;
+  --section-padding-x: clamp(1.5rem, 5vw, 6rem);
+  --container-max:     1400px;
 }
 
+/* ─── Tailwind v4 @theme — exposes tokens as Tailwind utilities ───────────── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Colors */
+  --color-background:       var(--background);
+  --color-background-alt:   var(--background-alt);
+  --color-background-light: var(--background-light);
+  --color-foreground:       var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-accent:           var(--accent);
+  --color-accent-hover:     var(--accent-hover);
+  --color-accent-subtle:    var(--accent-subtle);
+  --color-border:           var(--border-color);
+  --color-border-light:     var(--border-light);
+
+  --color-brown-950: #110904;
+  --color-brown-900: #1C0F07;
+  --color-brown-800: #2C1810;
+  --color-brown-700: #3D2416;
+  --color-brown-600: #5C3820;
+  --color-brown-500: #7A4F2E;
+
+  --color-caramel-600: #9A7240;
+  --color-caramel-500: #C4975A;
+  --color-caramel-400: #D4AE7A;
+  --color-caramel-300: #E2C99E;
+  --color-caramel-100: #F5ECD9;
+
+  --color-cream-100: #FAF7F2;
+  --color-cream-200: #F2EDE6;
+  --color-cream-300: #E8E0D4;
+  --color-cream-400: #D4C9BA;
+
+  --color-stone-400: #8C7B6B;
+  --color-stone-300: #A8998C;
+  --color-stone-200: #C4B9AF;
+
+  /* Fonts */
+  --font-display: var(--font-display);
+  --font-body:    var(--font-body);
+  --font-sans:    var(--font-body);
+
+  /* Container */
+  --container-max: 1400px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── Base reset & global styles ─────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ─── Typography scale ───────────────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+
+/* Display — hero-scale type like the reference image */
+.text-display {
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 12vw, 12rem);
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.text-heading-xl {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 5vw, 5rem);
+  font-weight: 700;
+  line-height: 1.0;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+.text-heading-lg {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 700;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.text-heading-md {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.text-label {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--foreground-muted);
+}
+
+.text-body {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--foreground-muted);
+}
+
+/* ─── Layout utilities ───────────────────────────────────────────────────── */
+.container-brand {
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--section-padding-x);
+}
+
+.section-y {
+  padding-block: var(--section-padding-y);
+}
+
+/* ─── Image overlay helpers (used in editorial grid blocks) ──────────────── */
+.img-overlay {
+  position: relative;
+  overflow: hidden;
+}
+
+.img-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(28, 15, 7, 0.85) 0%,
+    rgba(28, 15, 7, 0.3) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.img-overlay-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 1.5rem;
+}
+
+/* ─── Accent line — thin caramel rule used throughout ────────────────────── */
+.accent-line {
+  display: block;
+  width: 3rem;
+  height: 1px;
+  background-color: var(--accent);
+}
+
+/* ─── Selection colour ───────────────────────────────────────────────────── */
+::selection {
+  background-color: var(--color-caramel-500);
+  color: var(--color-brown-900);
+}
+
+/* ─── Focus ring ─────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-brown-900);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-brown-600);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-caramel-600);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ─── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
 }
