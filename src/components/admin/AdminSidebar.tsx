@@ -1,7 +1,9 @@
 'use client'
 
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { getAdminProfile, logoutAdmin, AdminProfile, INITIAL_ADMIN_PROFILE } from '@/data/adminProfileData'
 
 const IconDashboard = () => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ width: '18px', height: '18px', flexShrink: 0 }}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /></svg>
@@ -52,6 +54,46 @@ const bottomItems = [
 
 export function AdminSidebar() {
     const pathname = usePathname()
+    const router = useRouter()
+    const [profile, setProfile] = useState<AdminProfile>(INITIAL_ADMIN_PROFILE)
+    const [isPopoverOpen, setIsPopoverOpen] = useState(false)
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+    const popoverRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        setProfile(getAdminProfile())
+    }, [pathname])
+
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+                setIsPopoverOpen(false)
+                setShowLogoutConfirm(false)
+            }
+        }
+        function handleKeyDown(e: KeyboardEvent) {
+            if (e.key === 'Escape') {
+                setIsPopoverOpen(false)
+                setShowLogoutConfirm(false)
+            }
+        }
+        if (isPopoverOpen) {
+            document.addEventListener('mousedown', handleClickOutside)
+            document.addEventListener('keydown', handleKeyDown)
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside)
+            document.removeEventListener('keydown', handleKeyDown)
+        }
+    }, [isPopoverOpen])
+
+    const handleConfirmLogout = () => {
+        logoutAdmin()
+        setIsPopoverOpen(false)
+        setShowLogoutConfirm(false)
+        router.push('/admin/login?signed_out=1')
+    }
+
     const isActive = (href: string) =>
         href === '/admin' ? pathname === '/admin' : pathname.startsWith(href)
 
@@ -160,17 +202,13 @@ export function AdminSidebar() {
                                     {item.badge && (
                                         <span
                                             style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                borderRadius: '999px',
-                                                fontSize: '0.625rem',
+                                                fontSize: '0.6875rem',
                                                 fontWeight: 700,
-                                                minWidth: '20px',
-                                                height: '20px',
-                                                padding: '0 6px',
-                                                background: active ? '#C4975A' : '#F5ECD9',
-                                                color: active ? '#ffffff' : '#C4975A',
+                                                background: '#C4975A',
+                                                color: '#ffffff',
+                                                borderRadius: '20px',
+                                                padding: '2px 8px',
+                                                lineHeight: 1.3,
                                             }}
                                         >
                                             {item.badge}
@@ -236,24 +274,24 @@ export function AdminSidebar() {
                 </div>
             </nav>
 
-            {/* Bottom promo card with generous margin/padding around and spacious contents */}
+            {/* Bottom promo card */}
             <div style={{ padding: '10px 14px 16px 14px' }}>
                 <div
                     style={{
                         borderRadius: '16px',
                         background: '#2C1810',
                         overflow: 'hidden',
-                        padding: '20px 18px',
+                        padding: '18px 16px',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '14px',
+                        gap: '12px',
                         boxShadow: '0 4px 14px rgba(44, 24, 16, 0.12)',
                     }}
                 >
                     <div
                         style={{
-                            width: '40px',
-                            height: '40px',
+                            width: '36px',
+                            height: '36px',
                             borderRadius: '10px',
                             background: 'rgba(196, 151, 90, 0.18)',
                             display: 'flex',
@@ -261,14 +299,14 @@ export function AdminSidebar() {
                             justifyContent: 'center',
                         }}
                     >
-                        <span style={{ fontSize: '1.25rem', color: '#C4975A' }}>✦</span>
+                        <span style={{ fontSize: '1.15rem', color: '#C4975A' }}>✦</span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#F2EDE6', lineHeight: 1.3, margin: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#F2EDE6', lineHeight: 1.3, margin: 0 }}>
                             Video inspection
                         </p>
-                        <p style={{ fontSize: '0.75rem', color: '#A8998C', lineHeight: 1.5, margin: 0 }}>
-                            2 garments are waiting for your review before dispatch
+                        <p style={{ fontSize: '0.725rem', color: '#A8998C', lineHeight: 1.45, margin: 0 }}>
+                            2 garments waiting for pre-shipment review
                         </p>
                     </div>
                     <Link
@@ -277,10 +315,10 @@ export function AdminSidebar() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            borderRadius: '10px',
-                            padding: '11px 16px',
+                            borderRadius: '8px',
+                            padding: '9px 14px',
                             background: '#C4975A',
-                            fontSize: '0.8rem',
+                            fontSize: '0.775rem',
                             fontWeight: 600,
                             color: '#ffffff',
                             textDecoration: 'none',
@@ -293,63 +331,317 @@ export function AdminSidebar() {
                 </div>
             </div>
 
-            {/* Logged in User Section with generous padding and clear spacing */}
-            <div
-                style={{
-                    borderTop: '1px solid #EDE8E1',
-                    padding: '18px 20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '14px',
-                }}
-            >
+            {/* Interactive User Section with Floating Account Popover */}
+            <div ref={popoverRef} style={{ position: 'relative' }}>
+                {/* Popover Menu Floating Upward */}
+                {isPopoverOpen && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            bottom: '76px',
+                            left: '12px',
+                            right: '12px',
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '14px',
+                            border: '1px solid #EDE8E1',
+                            boxShadow: '0 16px 40px rgba(28, 15, 7, 0.16)',
+                            padding: '16px',
+                            zIndex: 100,
+                        }}
+                    >
+                        {showLogoutConfirm ? (
+                            <div>
+                                <h4 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 6px 0', color: '#1C0F07' }}>
+                                    Sign out of studio admin?
+                                </h4>
+                                <p style={{ fontSize: '12px', color: '#7C6F64', margin: '0 0 14px 0', lineHeight: 1.4 }}>
+                                    Your session token will be cleared and you will be redirected to the login screen.
+                                </p>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowLogoutConfirm(false)}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            fontSize: '12px',
+                                            color: '#7C6F64',
+                                            fontWeight: 500,
+                                            padding: '6px 12px',
+                                            cursor: 'pointer',
+                                            borderRadius: '6px',
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleConfirmLogout}
+                                        style={{
+                                            backgroundColor: '#C4975A',
+                                            border: 'none',
+                                            fontSize: '12px',
+                                            color: '#FFFFFF',
+                                            fontWeight: 600,
+                                            padding: '7px 14px',
+                                            cursor: 'pointer',
+                                            borderRadius: '6px',
+                                            boxShadow: '0 2px 6px rgba(196, 151, 90, 0.25)',
+                                        }}
+                                    >
+                                        Yes, sign out
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '12px',
+                                        paddingBottom: '12px',
+                                        borderBottom: '1px solid #EDE8E1',
+                                        marginBottom: '10px',
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            width: '42px',
+                                            height: '42px',
+                                            borderRadius: '50%',
+                                            backgroundColor: profile.avatarColor || '#C4975A',
+                                            color: '#FFFFFF',
+                                            fontSize: '14px',
+                                            fontWeight: 700,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        {profile.avatarInitials}
+                                    </div>
+                                    <div style={{ overflow: 'hidden' }}>
+                                        <p
+                                            style={{
+                                                fontSize: '13px',
+                                                fontWeight: 700,
+                                                color: '#1C0F07',
+                                                margin: 0,
+                                                whiteSpace: 'nowrap',
+                                                textOverflow: 'ellipsis',
+                                                overflow: 'hidden',
+                                            }}
+                                        >
+                                            {profile.displayName || `${profile.firstName} ${profile.lastName}`}
+                                        </p>
+                                        <p
+                                            style={{
+                                                fontSize: '11px',
+                                                color: '#7C6F64',
+                                                margin: '1px 0 4px 0',
+                                                whiteSpace: 'nowrap',
+                                                textOverflow: 'ellipsis',
+                                                overflow: 'hidden',
+                                            }}
+                                        >
+                                            {profile.email}
+                                        </p>
+                                        <span
+                                            style={{
+                                                display: 'inline-block',
+                                                fontSize: '10px',
+                                                fontWeight: 600,
+                                                backgroundColor: '#FDF3E7',
+                                                color: '#C4975A',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                            }}
+                                        >
+                                            {profile.role}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <Link
+                                        href="/admin/profile"
+                                        onClick={() => setIsPopoverOpen(false)}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '8px 10px',
+                                            borderRadius: '8px',
+                                            fontSize: '12px',
+                                            color: '#1C0F07',
+                                            textDecoration: 'none',
+                                            transition: 'background 0.15s',
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={{ color: '#C4975A' }}>👤</span>
+                                            <span>My profile</span>
+                                        </div>
+                                    </Link>
+
+                                    <Link
+                                        href="/admin/profile/password"
+                                        onClick={() => setIsPopoverOpen(false)}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '8px 10px',
+                                            borderRadius: '8px',
+                                            fontSize: '12px',
+                                            color: '#1C0F07',
+                                            textDecoration: 'none',
+                                            transition: 'background 0.15s',
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={{ color: '#C4975A' }}>🔑</span>
+                                            <span>Change password</span>
+                                        </div>
+                                    </Link>
+
+                                    <Link
+                                        href="/admin/profile/notifications"
+                                        onClick={() => setIsPopoverOpen(false)}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '8px 10px',
+                                            borderRadius: '8px',
+                                            fontSize: '12px',
+                                            color: '#1C0F07',
+                                            textDecoration: 'none',
+                                            transition: 'background 0.15s',
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={{ color: '#C4975A' }}>🔔</span>
+                                            <span>Notification preferences</span>
+                                        </div>
+                                    </Link>
+                                </div>
+
+                                <hr style={{ margin: '8px 0', border: 'none', borderTop: '1px solid #EDE8E1' }} />
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowLogoutConfirm(true)}
+                                    style={{
+                                        width: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
+                                        padding: '8px 10px',
+                                        borderRadius: '8px',
+                                        fontSize: '12px',
+                                        color: '#D93025',
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        transition: 'background 0.15s',
+                                    }}
+                                >
+                                    <span>↪</span>
+                                    <span style={{ fontWeight: 500 }}>Sign out</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div
+                    onClick={() => {
+                        setIsPopoverOpen(!isPopoverOpen)
+                        setShowLogoutConfirm(false)
+                    }}
+                    title="Account settings & profile"
                     style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        background: '#C4975A',
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        color: '#ffffff',
+                        borderTop: '1px solid #EDE8E1',
+                        padding: '16px 18px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
+                        gap: '12px',
+                        cursor: 'pointer',
+                        backgroundColor: isPopoverOpen ? '#FAF7F2' : 'transparent',
+                        transition: 'background-color 0.15s ease',
                     }}
                 >
-                    SA
+                    <div
+                        style={{
+                            width: '38px',
+                            height: '38px',
+                            borderRadius: '50%',
+                            background: profile.avatarColor || '#C4975A',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            boxShadow: '0 2px 5px rgba(196, 151, 90, 0.25)',
+                        }}
+                    >
+                        {profile.avatarInitials}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <p
+                            style={{
+                                fontSize: '0.85rem',
+                                fontWeight: 600,
+                                color: '#1C0F07',
+                                lineHeight: 1.25,
+                                margin: 0,
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'ellipsis',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            {profile.displayName || `${profile.firstName} ${profile.lastName}`}
+                        </p>
+                        <p style={{ fontSize: '0.7rem', color: '#8C7B6B', margin: 0 }}>
+                            {profile.role}
+                        </p>
+                    </div>
+
+                    <div
+                        style={{
+                            width: '30px',
+                            height: '30px',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: isPopoverOpen ? '#C4975A' : '#A8998C',
+                            flexShrink: 0,
+                            transform: isPopoverOpen ? 'rotate(180deg)' : 'none',
+                            transition: 'transform 0.2s ease',
+                        }}
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ width: '16px', height: '16px' }}
+                        >
+                            <polyline points="18 15 12 9 6 15" />
+                        </svg>
+                    </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                    <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1C0F07', lineHeight: 1.25, margin: 0 }}>
-                        Samuelson A.
-                    </p>
-                    <p style={{ fontSize: '0.725rem', color: '#8C7B6B', margin: 0 }}>
-                        Owner · Admin
-                    </p>
-                </div>
-                <Link
-                    href="/admin/login"
-                    title="Sign out"
-                    style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#8C7B6B',
-                        textDecoration: 'none',
-                        flexShrink: 0,
-                        background: 'transparent',
-                    }}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ width: '18px', height: '18px' }}>
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                        <polyline points="16 17 21 12 16 7" />
-                        <line x1="21" y1="12" x2="9" y2="12" />
-                    </svg>
-                </Link>
             </div>
         </aside>
     )
