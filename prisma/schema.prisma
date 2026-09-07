@@ -1,0 +1,672 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MASTER_TAILOR
+  TAILOR
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  IN_PRODUCTION
+  INSPECTION
+  APPROVED
+  DISPATCHED
+  DELIVERED
+}
+
+enum DeliveryLocation {
+  ITALY
+  NIGERIA
+}
+
+enum Language {
+  EN
+  IT
+}
+
+enum Currency {
+  NGN
+  EUR
+}
+
+enum PaymentGateway {
+  PAYSTACK
+  STRIPE
+  BANK_TRANSFER
+  CASH
+  POS
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentType {
+  DEPOSIT
+  BALANCE
+  FULL_PAYMENT
+  ALTERATION_FEE
+  REFUND
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReferralRewardType {
+  DISCOUNT_PERCENT
+  FREE_ITEM
+  PRIORITY_SLOT
+}
+
+enum ReferralRewardStatus {
+  PENDING
+  CREDITED
+  REDEEMED
+}
+
+enum SubscriptionStatus {
+  INACTIVE
+  ACTIVE
+  CANCELLED
+  PAUSED
+}
+
+enum SubscriptionTierLevel {
+  STANDARD
+  PRIORITY
+  VIP
+}
+
+enum DesignCategory {
+  NATIVE_WEAR
+  ENGLISH_SUIT
+  CASUAL
+  CHILDRENS
+}
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+  SCHEDULED
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+enum SubscriberStatus {
+  ACTIVE
+  UNSUBSCRIBED
+  BOUNCED
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  EMAIL
+  SMS
+}
+
+enum NotificationType {
+  ORDER_CONFIRMED
+  STATUS_UPDATE
+  INSPECTION_READY
+  BALANCE_REMINDER
+  DISPATCHED
+  REVIEW_REQUEST
+}
+
+enum MeasurementUnit {
+  CM
+  INCHES
+}
+
+// ─── AUTHENTICATION & STAFF ───────────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(cuid())
+  firstName      String
+  lastName       String
+  displayName    String?
+  email          String    @unique
+  passwordHash   String
+  phone          String?
+  whatsApp       String?
+  role           UserRole  @default(ADMIN)
+  avatarInitials String?
+  avatarColor    String?   @default("#C4975A")
+  isActive       Boolean   @default(true)
+  location       String?   @default("Verona Atelier")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  sessions            Session[]
+  assignedOrders      Order[]             @relation("TailorAssignedOrders")
+  approvedInspections Order[]             @relation("InspectionApprovedBy")
+  moderatedReviews    Review[]            @relation("ReviewModerator")
+  authoredBlogPosts   BlogPost[]          @relation("BlogAuthor")
+  authoredCampaigns   EmailCampaign[]     @relation("CampaignAuthor")
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  deviceName String?
+  browser    String?
+  os         String?
+  ipAddress  String?
+  location   String?
+  lastActive DateTime @default(now())
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // e.g. "ORDER_STAGE_CHANGED", "INSPECTION_APPROVED"
+  entityType String   // e.g. "Order", "Customer", "Review"
+  entityId   String
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// ─── CUSTOMERS & MEASUREMENTS ─────────────────────────────────────────────────
+
+model Customer {
+  id                 String             @id @default(cuid())
+  firstName          String
+  lastName           String
+  email              String?            @unique
+  phone              String             @unique
+  whatsapp           String?
+  preferredLang      Language           @default(EN)
+  preferredCurrency  Currency           @default(NGN)
+  deliveryLocation   DeliveryLocation?
+  deliveryAddress    String?
+  adminNotes         String?
+
+  // Subscription provision (dormant at launch)
+  subscriptionStatus SubscriptionStatus @default(INACTIVE)
+  subscriptionTierId String?
+  subscriptionTier   SubscriptionTier?  @relation(fields: [subscriptionTierId], references: [id])
+  subscriptionStart  DateTime?
+  subscriptionEnd    DateTime?
+
+  measurements       Measurement?
+  orders             Order[]
+  reviews            Review[]
+  referralsSent      Referral[]         @relation("ReferrerCustomer")
+  referredBy         Referral?          @relation("ReferredCustomer")
+  subscriberProfile  Subscriber?
+
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([phone])
+  @@index([email])
+  @@map("customers")
+}
+
+model Measurement {
+  id            String          @id @default(cuid())
+  customerId    String          @unique
+  customer      Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  unit          MeasurementUnit @default(CM)
+
+  // Standard jacket / kaftan points
+  chest         Float?
+  shoulder      Float?
+  sleeveLength  Float?
+  neck          Float?
+  length        Float?          // Garment / top length
+  bicep         Float?
+  wrist         Float?
+
+  // Lower body / trouser points
+  waist         Float?
+  hips          Float?
+  inseam        Float?
+  trouserLength Float?          // Outseam length
+  thigh         Float?
+
+  fitNotes      String?         // e.g. "Prefers slim fit, extra cuff room"
+  measuredAt    DateTime?       @default(now())
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@map("measurements")
+}
+
+// ─── ORDERS & PRODUCTION ──────────────────────────────────────────────────────
+
+model Order {
+  id                    String              @id @default(cuid())
+  orderNumber           String              @unique // Format: CS-2026-0001
+  customerId            String
+  customer              Customer            @relation(fields: [customerId], references: [id])
+  designId              String?
+  design                Design?             @relation(fields: [designId], references: [id])
+  tailorId              String?
+  tailor                User?               @relation("TailorAssignedOrders", fields: [tailorId], references: [id])
+
+  status                OrderStatus         @default(NEW)
+  deliveryLocation      DeliveryLocation
+  deliveryAddress       String
+  occasion              String?
+  deadline              DateTime?
+  estimatedDelivery     DateTime?
+
+  // Immutable measurement snapshot at time of booking
+  measurementSnapshot   Json?
+
+  // Custom design uploads (WhatsApp clients / bespoke requests)
+  customDesignUrl       String?
+  customDesignNotes     String?
+
+  // Fabric & styling options
+  fabricChoice          String?
+  colourChoice          String?
+  additionalNotes       String?
+
+  // Financials
+  currency              Currency
+  totalAmount           Float
+  depositAmount         Float
+  balanceAmount         Float
+  depositPaid           Boolean             @default(false)
+  balancePaid           Boolean             @default(false)
+  balancePaymentLink    String?
+  balanceLinkExpiresAt  DateTime?
+
+  // Quality Inspection Gate
+  inspectionMediaUrls   String[]
+  inspectionVideoUrl    String?
+  inspectionNotes       String?
+  inspectionApprovedAt  DateTime?
+  inspectionApprovedById String?
+  inspectionApprovedBy  User?               @relation("InspectionApprovedBy", fields: [inspectionApprovedById], references: [id])
+
+  // Courier Dispatch
+  courierName           String?             // e.g. "DHL Express", "GIG Logistics"
+  trackingNumber        String?
+  trackingUrl           String?
+  dispatchedAt          DateTime?
+  deliveredAt           DateTime?
+
+  // Relational logs
+  timeline              OrderTimelineEvent[]
+  payments              Payment[]
+  review                Review?
+  notifications         OrderNotification[]
+  convertedReferrals    Referral[]          @relation("ConvertedOrder")
+
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([orderNumber])
+  @@index([customerId])
+  @@index([tailorId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderTimelineEvent {
+  id         String       @id @default(cuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  actorName  String?      // e.g. "Samuelson Anaele"
+  actorId    String?
+  notes      String?
+  createdAt  DateTime     @default(now())
+
+  @@index([orderId])
+  @@map("order_timeline_events")
+}
+
+model Payment {
+  id         String         @id @default(cuid())
+  orderId    String
+  order      Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  gateway    PaymentGateway
+  type       PaymentType    @default(DEPOSIT)
+  status     PaymentStatus  @default(PENDING)
+  currency   Currency
+  amount     Float
+  reference  String         @unique // Gateway or wire transfer reference
+  paidAt     DateTime?
+  receiptUrl String?
+  metadata   Json?
+
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([orderId])
+  @@index([reference])
+  @@map("payments")
+}
+
+// ─── CATALOGUE & DESIGNS ──────────────────────────────────────────────────────
+
+model Design {
+  id              String         @id @default(cuid())
+  slug            String         @unique
+  sku             String?        @unique
+  category        DesignCategory
+  isFeatured      Boolean        @default(false)
+  isVisible       Boolean        @default(true)
+  sortOrder       Int            @default(0)
+  turnaroundDays  Int
+
+  // Dual-currency pricing
+  priceNGN        Float
+  priceEUR        Float
+
+  // Localised English
+  nameEN          String
+  descriptionEN   String
+  fabricOptionsEN String[]
+  colourOptionsEN String[]
+  metaTitleEN     String?
+  metaDescEN      String?
+
+  // Localised Italian
+  nameIT          String
+  descriptionIT   String
+  fabricOptionsIT String[]
+  colourOptionsIT String[]
+  metaTitleIT     String?
+  metaDescIT      String?
+
+  photos          DesignPhoto[]
+  orders          Order[]
+  reviews         Review[]
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([category])
+  @@index([slug])
+  @@map("designs")
+}
+
+model DesignPhoto {
+  id        String   @id @default(cuid())
+  designId  String
+  design    Design   @relation(fields: [designId], references: [id], onDelete: Cascade)
+  url       String
+  altText   String?
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([designId])
+  @@map("design_photos")
+}
+
+// ─── REVIEWS & TESTIMONIALS ───────────────────────────────────────────────────
+
+model Review {
+  id            String       @id @default(cuid())
+  customerId    String
+  customer      Customer     @relation(fields: [customerId], references: [id])
+  orderId       String       @unique
+  order         Order        @relation(fields: [orderId], references: [id])
+  designId      String?
+  design        Design?      @relation(fields: [designId], references: [id])
+
+  status        ReviewStatus @default(PENDING)
+  rating        Int          // 1–5
+  comment       String?
+  photoUrls     String[]
+  moderatedAt   DateTime?
+  moderatedById String?
+  moderator     User?        @relation("ReviewModerator", fields: [moderatedById], references: [id])
+  moderatorNote String?
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([status])
+  @@index([designId])
+  @@map("reviews")
+}
+
+// ─── REFERRALS & REWARDS ──────────────────────────────────────────────────────
+
+model Referral {
+  id                   String               @id @default(cuid())
+  referrerId           String
+  referrer             Customer             @relation("ReferrerCustomer", fields: [referrerId], references: [id])
+  referredCustomerId   String?              @unique
+  referredCustomer     Customer?            @relation("ReferredCustomer", fields: [referredCustomerId], references: [id])
+
+  token                String               @unique
+  convertedOrderId     String?
+  convertedOrder       Order?               @relation("ConvertedOrder", fields: [convertedOrderId], references: [id])
+
+  referrerRewardType   ReferralRewardType?
+  referrerRewardStatus ReferralRewardStatus @default(PENDING)
+  referrerRewardValue  Float?
+  referrerRedeemedAt   DateTime?
+
+  referredRewardType   ReferralRewardType?
+  referredRewardStatus ReferralRewardStatus @default(PENDING)
+  referredRewardValue  Float?
+  referredRedeemedAt   DateTime?
+
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([token])
+  @@index([referrerId])
+  @@map("referrals")
+}
+
+// ─── EMAIL MARKETING & SUBSCRIBERS ────────────────────────────────────────────
+
+model Subscriber {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  name           String?
+  customerId     String?          @unique
+  customer       Customer?        @relation(fields: [customerId], references: [id])
+  source         String?          @default("homepage") // "homepage", "checkout", "blog"
+  language       Language         @default(EN)
+  status         SubscriberStatus @default(ACTIVE)
+  openCount      Int              @default(0)
+  unsubscribedAt DateTime?
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@map("subscribers")
+}
+
+model EmailCampaign {
+  id             String         @id @default(cuid())
+  name           String
+  status         CampaignStatus @default(DRAFT)
+  audienceLang   Language?      // NULL = All languages
+  subjectEN      String
+  subjectIT      String?
+  previewTextEN  String?
+  previewTextIT  String?
+  contentEN      String         // HTML / TipTap JSON
+  contentIT      String?
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  recipientCount Int            @default(0)
+  openedCount    Int            @default(0)
+  clickedCount   Int            @default(0)
+
+  createdById    String?
+  createdBy      User?          @relation("CampaignAuthor", fields: [createdById], references: [id])
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("email_campaigns")
+}
+
+// ─── BLOG SUITE ───────────────────────────────────────────────────────────────
+
+model BlogPost {
+  id               String         @id @default(cuid())
+  slug             String         @unique
+  status           BlogPostStatus @default(DRAFT)
+  category         String?
+  featuredImageUrl String?
+  readTimeMinutes  Int?           @default(4)
+  viewCount        Int            @default(0)
+
+  publishedAt      DateTime?
+  scheduledAt      DateTime?
+
+  // English
+  titleEN          String
+  excerptEN        String?
+  bodyEN           String
+  tagsEN           String[]
+  metaTitleEN      String?
+  metaDescEN       String?
+
+  // Italian
+  titleIT          String?
+  excerptIT        String?
+  bodyIT           String?
+  tagsIT           String[]
+  metaTitleIT      String?
+  metaDescIT       String?
+
+  authorId         String?
+  author           User?          @relation("BlogAuthor", fields: [authorId], references: [id])
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([slug])
+  @@index([status])
+  @@map("blog_posts")
+}
+
+// ─── NOTIFICATIONS LOG ────────────────────────────────────────────────────────
+
+model OrderNotification {
+  id             String              @id @default(cuid())
+  orderId        String
+  order          Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  channel        NotificationChannel @default(WHATSAPP)
+  type           NotificationType
+  recipient      String?             // Phone or email sent to
+  messageContent String?
+  sentAt         DateTime            @default(now())
+  success        Boolean             @default(true)
+  error          String?
+
+  @@index([orderId])
+  @@map("order_notifications")
+}
+
+// ─── SUBSCRIPTIONS (Dormant at Launch) ─────────────────────────────────────────
+
+model SubscriptionTier {
+  id               String                @id @default(cuid())
+  tierLevel        SubscriptionTierLevel @unique
+  nameEN           String
+  nameIT           String
+  priceNGN         Float
+  priceEUR         Float
+  intervalDays     Int                   @default(30)
+  features         String[]
+  isActive         Boolean               @default(false)
+  paystackPlanCode String?
+  stripePriceId    String?
+  customers        Customer[]
+
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@map("subscription_tiers")
+}
+
+// ─── APP SETTINGS & ATELIER CONFIGURATION ──────────────────────────────────────
+
+model AppSettings {
+  id                     String   @id @default("singleton")
+  businessName           String   @default("CaptainStitches")
+  businessEmail          String   @default("orders@captainstitches.com")
+  whatsappNumber         String   @default("+39 345 678 9012")
+  instagramHandle        String?  @default("@captainstitches")
+  veronaAddress          String?  @default("Via Giuseppe Mazzini 14, 37121 Verona, Italy")
+  lagosAddress           String?  @default("Plot 12, Admiralty Way, Lekki Phase 1, Lagos, Nigeria")
+
+  // Currency & FX
+  fxRateNGNToEUR         Float    @default(0.00055)
+  useLiveFxRate          Boolean  @default(false)
+  liveFxRateSource       String?  @default("exchangerate-api")
+  fxLastUpdated          DateTime?
+
+  // Financial policies
+  depositPercent         Float    @default(50)
+  autoSendBalanceRequest Boolean  @default(true)
+
+  // Turnaround times per category (in days)
+  defaultTurnaroundDays  Json     // { "NATIVE_WEAR": 14, "ENGLISH_SUIT": 21, "CASUAL": 10, "CHILDRENS": 7 }
+
+  // API Credentials
+  paystackPublicKey      String   @default("")
+  paystackSecretKey      String?
+  stripePublicKey        String   @default("")
+  stripeSecretKey        String?
+
+  // Feature Flags
+  subscriptionsEnabled   Boolean  @default(false)
+  referralsEnabled       Boolean  @default(true)
+
+  updatedAt              DateTime @updatedAt
+
+  @@map("app_settings")
+}
