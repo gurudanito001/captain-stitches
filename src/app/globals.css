@@ -27,6 +27,21 @@
   --color-stone-300: #A8998C;
   --color-stone-200: #C4B9AF;
 
+  /* Complementary luxury palette */
+  --color-emerald-950: #061711;
+  --color-emerald-900: #0A2219;
+  --color-emerald-800: #0F3226;
+  --color-emerald-700: #174D3B;
+  --color-emerald-500: #257D61;
+  --color-terracotta-600: #A83812;
+  --color-terracotta-500: #C2410C;
+  --color-terracotta-400: #E0531D;
+  --color-alabaster-50:  #FCFAF7;
+  --color-alabaster-100: #FAF6F0;
+  --color-alabaster-200: #F3ECE1;
+  --color-alabaster-300: #E6DCce;
+  --color-alabaster-text: #160F09;
+
   /* Semantic aliases */
   --background:        var(--color-brown-900);
   --background-alt:    var(--color-brown-800);
@@ -85,6 +100,20 @@
   --color-stone-300: #A8998C;
   --color-stone-200: #C4B9AF;
 
+  --color-emerald-950: #061711;
+  --color-emerald-900: #0A2219;
+  --color-emerald-800: #0F3226;
+  --color-emerald-700: #174D3B;
+  --color-emerald-500: #257D61;
+  --color-terracotta-600: #A83812;
+  --color-terracotta-500: #C2410C;
+  --color-terracotta-400: #E0531D;
+  --color-alabaster-50:  #FCFAF7;
+  --color-alabaster-100: #FAF6F0;
+  --color-alabaster-200: #F3ECE1;
+  --color-alabaster-300: #E6DCce;
+  --color-alabaster-text: #160F09;
+
   /* Fonts */
   --font-display: var(--font-display);
   --font-body:    var(--font-body);
@@ -97,6 +126,9 @@
 /* ─── Base reset & global styles ─────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
+}
+
+body {
   margin: 0;
   padding: 0;
 }
@@ -116,13 +148,51 @@ body {
   overflow-x: hidden;
 }
 
+/* ─── Form Inputs: dark gray text color across the entire app ────────────── */
+input,
+textarea,
+select {
+  color: #2B2B2B !important; /* Dark gray text */
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #78716C; /* Muted readable stone gray placeholder */
+  opacity: 1;
+}
+
+/* Ensure datetime/time/date inputs and calendar pickers display dark gray text */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="number"],
+input[type="search"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="text"],
+select,
+textarea {
+  color: #2B2B2B !important;
+}
+
+/* Prevent browser autofill from turning text light gold or white */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: #2B2B2B !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 /* ─── Typography scale ───────────────────────────────────────────────────── */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
   font-weight: 700;
   line-height: 1.05;
   letter-spacing: -0.01em;
-  color: var(--foreground);
+  color: inherit;
 }
 
 /* Display — hero-scale type like the reference image */
@@ -165,22 +235,23 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 500;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: var(--foreground-muted);
 }
 
 .text-body {
   font-family: var(--font-body);
   font-size: 0.9375rem;
   line-height: 1.7;
-  color: var(--foreground-muted);
 }
 
 /* ─── Layout utilities ───────────────────────────────────────────────────── */
 .container-brand {
   width: 100%;
-  max-width: var(--container-max);
-  margin-inline: auto;
-  padding-inline: var(--section-padding-x);
+  max-width: 1400px;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: clamp(1.5rem, 5vw, 4rem) !important;
+  padding-right: clamp(1.5rem, 5vw, 4rem) !important;
+  box-sizing: border-box;
 }
 
 .section-y {

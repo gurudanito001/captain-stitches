@@ -4,10 +4,10 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-    AdminCustomer,
-    CustomerMeasurementsCm,
-    saveCustomer,
-} from '@/data/adminCustomersData'
+    createCustomerAction,
+    addCustomerAdminNoteAction,
+} from '@/lib/actions/customers'
+import { CustomerMeasurementsCm } from '@/data/adminCustomersData'
 import { Location, Currency } from '@/data/adminOrdersData'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
@@ -25,6 +25,8 @@ const IconPlus = () => (
 
 export default function CreateCustomerPage() {
     const router = useRouter()
+
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
     // ─── Personal Details Form ────────────────────────────────────────────────
     const [name, setName] = useState('')
@@ -71,80 +73,58 @@ export default function CreateCustomerPage() {
     }
 
     // Submit helper
-    const submitCustomer = (andCreateOrder: boolean) => {
+    const submitCustomer = async (andCreateOrder: boolean) => {
         if (!name.trim() || !phone.trim()) {
             alert('Please enter customer name and phone number.')
             return
         }
 
-        const newId = `cust-${Date.now()}`
-        const palette = ['#C4975A', '#166534', '#1D4ED8', '#92600A', '#7A4F2E', '#4338CA', '#B45309']
-        const randomColor = palette[Math.floor(Math.random() * palette.length)]
-        const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        setIsSubmitting(true)
+        try {
+            const res = await createCustomerAction({
+                name: name.trim(),
+                phone: phone.trim(),
+                whatsapp: (sameAsPhone ? phone : whatsapp).trim(),
+                email: email.trim() || undefined,
+                location,
+                address: address.trim(),
+                language: language === 'IT' ? 'Italian' : 'English',
+                currency,
+                measurements: showMeasurements
+                    ? {
+                          unit: 'cm',
+                          chest: measurements.chest,
+                          shoulder: measurements.shoulder,
+                          sleeve: measurements.sleeve,
+                          waist: measurements.waist,
+                          hips: measurements.hips,
+                          inseam: measurements.inseam,
+                          neck: measurements.neck,
+                          length: measurements.length,
+                          fitNotes: measurements.fitNotes,
+                      }
+                    : undefined,
+            })
 
-        const newCustomer: AdminCustomer = {
-            id: newId,
-            name: name.trim(),
-            avatarColor: randomColor,
-            email: email.trim(),
-            phone: phone.trim(),
-            whatsapp: (sameAsPhone ? phone : whatsapp).trim(),
-            location: location,
-            address: address.trim(),
-            language: language,
-            currency: currency,
-            dateJoined: today,
-            measurements: {
-                ...measurements,
-                lastUpdated: today,
-            },
-            summary: {
-                totalOrders: 0,
-                totalSpentNGN: 0,
-                totalSpentEUR: 0,
-                lastOrderDate: '—',
-                referralCount: 0,
-                averageRating: 0,
-            },
-            ordersHistory: [],
-            reviews: [],
-            referrals: [
-                {
-                    refCode: `CS-${name.split(' ')[0].toUpperCase()}${Math.floor(10 + Math.random() * 90)}`,
-                    totalReferred: 0,
-                    convertedCount: 0,
-                    rewardsEarned: [],
-                },
-            ],
-            emailMarketing: {
-                isSubscribed: !!email.trim(),
-                source: 'Manual Atelier WhatsApp Onboarding',
-                language: language,
-                lastOpenedEmail: undefined,
-            },
-            subscription: {
-                status: 'INACTIVE',
-                tier: 'NONE',
-                note: 'Manual prospect entry.',
-            },
-            adminNotes: initialNote.trim()
-                ? [
-                      {
-                          id: `cn-${Date.now()}`,
-                          author: 'Samuelson (Admin)',
-                          text: initialNote.trim(),
-                          timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-                      },
-                  ]
-                : [],
-        }
+            if (!res.success || !res.customer) {
+                alert(res.error || 'Failed to create customer in database.')
+                setIsSubmitting(false)
+                return
+            }
 
-        saveCustomer(newCustomer)
+            if (initialNote.trim()) {
+                await addCustomerAdminNoteAction(res.customer.id, initialNote.trim())
+            }
 
-        if (andCreateOrder) {
-            router.push(`/admin/orders/new`)
-        } else {
-            router.push(`/admin/customers/${newId}`)
+            if (andCreateOrder) {
+                router.push(`/admin/orders/new`)
+            } else {
+                router.push(`/admin/customers/${res.customer.id}`)
+            }
+        } catch (err: any) {
+            console.error('Error creating customer:', err)
+            alert(err.message || 'Error creating customer')
+            setIsSubmitting(false)
         }
     }
 
@@ -471,6 +451,7 @@ export default function CreateCustomerPage() {
 
                 <button
                     type="button"
+                    disabled={isSubmitting}
                     onClick={() => submitCustomer(false)}
                     style={{
                         padding: '0.65rem 1.35rem',
@@ -480,14 +461,16 @@ export default function CreateCustomerPage() {
                         color: '#C4975A',
                         fontSize: '0.85rem',
                         fontWeight: 700,
-                        cursor: 'pointer',
+                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                        opacity: isSubmitting ? 0.6 : 1,
                     }}
                 >
-                    Create Customer
+                    {isSubmitting ? 'Creating...' : 'Create Customer'}
                 </button>
 
                 <button
                     type="button"
+                    disabled={isSubmitting}
                     onClick={() => submitCustomer(true)}
                     style={{
                         display: 'inline-flex',
@@ -496,16 +479,16 @@ export default function CreateCustomerPage() {
                         padding: '0.65rem 1.5rem',
                         borderRadius: '9px',
                         border: 'none',
-                        backgroundColor: '#C4975A',
+                        backgroundColor: isSubmitting ? '#E0D7CB' : '#C4975A',
                         color: '#FFFFFF',
                         fontSize: '0.85rem',
                         fontWeight: 700,
-                        cursor: 'pointer',
+                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
                         boxShadow: '0 2px 6px rgba(196,151,90,0.3)',
                     }}
                 >
                     <IconPlus />
-                    <span>Create & Start Bespoke Order →</span>
+                    <span>{isSubmitting ? 'Creating...' : 'Create & Start Bespoke Order →'}</span>
                 </button>
             </div>
         </div>

@@ -8,13 +8,14 @@ export const metadata: Metadata = {
     template: '%s | CaptainStitches',
   },
   description:
-    'Bespoke Nigerian and European fashion made to your exact measurements. Native wear, English suits, and more — crafted in Nigeria, delivered to Italy and beyond.',
+    'Bespoke Nigerian fashion and authentic African fabric accessories made to your exact measurements. Native wear, Senator sets, Ankara accessories — crafted in Nigeria, delivered to Italy and beyond.',
   keywords: [
     'bespoke tailor',
     'Nigerian fashion',
     'agbada Italy',
-    'senator suit',
-    'Nigerian suit Europe',
+    'senator set',
+    'Ankara ties Europe',
+    'African fabric accessories',
     'custom clothing delivery Italy',
     'bespoke African fashion',
   ],
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
     siteName: 'CaptainStitches',
     title: 'CaptainStitches — Bespoke Fashion, Delivered',
     description:
-      'Native Nigerian wear and English suits, made to your measurements and delivered across Europe.',
+      'Native Nigerian wear and African fabric accessories, made to your measurements and delivered across Europe.',
   },
   twitter: {
     card: 'summary_large_image',

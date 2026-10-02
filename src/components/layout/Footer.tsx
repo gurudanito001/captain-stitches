@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 const collections = [
   { label: 'Native wear', href: '/catalogue?category=native-wear' },
-  { label: 'English suits', href: '/catalogue?category=english-suit' },
+  { label: 'Fabric accessories & ties', href: '/catalogue?category=accessories' },
   { label: 'Casual wear', href: '/catalogue?category=casual' },
   { label: "Children's clothing", href: '/catalogue?category=children' },
   { label: 'Custom order', href: '/order' },
@@ -13,6 +13,7 @@ const company = [
   { label: 'Blog', href: '/blog' },
   { label: 'Referral programme', href: '/referral' },
   { label: 'Contact', href: '/contact' },
+  { label: 'Atelier Portal', href: '/admin' },
 ]
 
 const support = [
@@ -28,7 +29,19 @@ export function Footer() {
 
 
       {/* Main footer content */}
-      <div className="container-brand pt-24 pb-16 md:pt-32 md:pb-20" >
+      <div
+        className="container-brand"
+        style={{
+          maxWidth: '1400px',
+          margin: '0 auto',
+          width: '100%',
+          paddingLeft: 'clamp(1.5rem, 5vw, 4rem)',
+          paddingRight: 'clamp(1.5rem, 5vw, 4rem)',
+          paddingTop: '3rem',
+          paddingBottom: '2.5rem',
+          boxSizing: 'border-box',
+        }}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 lg:gap-8">
 
           {/* Brand column — spans 2 cols on large screens */}
@@ -143,8 +156,18 @@ export function Footer() {
       </div>
 
       {/* Bottom bar */}
-      <div className="border-t border-brown-800" style={{ paddingTop: "20px" }}>
-        <div className="container-brand py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="border-t border-brown-800" style={{ paddingTop: "20px", paddingBottom: "20px" }}>
+        <div
+          className="container-brand flex flex-col sm:flex-row items-center justify-between gap-4"
+          style={{
+            maxWidth: '1400px',
+            margin: '0 auto',
+            width: '100%',
+            paddingLeft: 'clamp(1.5rem, 5vw, 4rem)',
+            paddingRight: 'clamp(1.5rem, 5vw, 4rem)',
+            boxSizing: 'border-box',
+          }}
+        >
           <p className="text-label text-stone-400 text-xs">
             © {new Date().getFullYear()} CaptainStitches. All rights reserved.
           </p>
@@ -161,6 +184,27 @@ export function Footer() {
               className="text-label text-stone-400 hover:text-caramel-500 transition-colors text-xs"
             >
               Terms of use
+            </Link>
+            <Link
+              href="/admin"
+              className="text-label text-stone-400 hover:text-caramel-500 transition-colors text-xs inline-flex items-center gap-1"
+              title="Staff Atelier Management Portal"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-3 h-3 text-caramel-500"
+                aria-hidden="true"
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              Staff Portal
             </Link>
 
             {/* Social */}

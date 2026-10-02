@@ -168,7 +168,7 @@ export function AdminBlogEditor({ initialPost, isNew = false }: AdminBlogEditorP
         setPost(updatedPost)
         setIsPublishModalOpen(false)
         setIsSaving(false)
-        showToast('Article published live to public atelier journal!')
+        showToast('Article published live to public journal!')
     }
 
     const handleConfirmSchedule = () => {
@@ -470,7 +470,7 @@ export function AdminBlogEditor({ initialPost, isNew = false }: AdminBlogEditorP
                                     flex: 1,
                                     fontSize: '0.8125rem',
                                     fontFamily: 'monospace',
-                                    color: '#C4975A',
+                                    color: '#2B2B2B',
                                     fontWeight: 600,
                                     border: 'none',
                                     outline: 'none',
@@ -845,7 +845,7 @@ export function AdminBlogEditor({ initialPost, isNew = false }: AdminBlogEditorP
                                     {(activeLang === 'EN' ? post.contentEN.metaTitle : post.contentIT.metaTitle) || post.contentEN.title || 'CaptainStitches Journal Article'}
                                 </p>
                                 <p style={{ margin: '4px 0 0', fontSize: '0.8125rem', color: '#4d5156', lineHeight: 1.45 }}>
-                                    {(activeLang === 'EN' ? post.contentEN.metaDescription : post.contentIT.metaDescription) || post.contentEN.excerpt || 'Read the latest bespoke tailoring dispatch from CaptainStitches atelier.'}
+                                    {(activeLang === 'EN' ? post.contentEN.metaDescription : post.contentIT.metaDescription) || post.contentEN.excerpt || 'Read the latest bespoke tailoring dispatch from CaptainStitches.'}
                                 </p>
                             </div>
                         </div>

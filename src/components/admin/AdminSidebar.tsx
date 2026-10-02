@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { getAdminProfile, logoutAdmin, AdminProfile, INITIAL_ADMIN_PROFILE } from '@/data/adminProfileData'
+import { logoutAdminAction } from '@/lib/actions/auth'
+import { getAdminSidebarCountsAction, AdminSidebarCounts } from '@/lib/actions/sidebar'
+import { getAllOrders } from '@/data/adminOrdersData'
 
 const IconDashboard = () => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ width: '18px', height: '18px', flexShrink: 0 }}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /></svg>
@@ -36,13 +39,20 @@ const IconSettings = () => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ width: '18px', height: '18px', flexShrink: 0 }}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
 )
 
-const navItems = [
+interface NavItem {
+    label: string
+    href: string
+    icon: React.ReactNode
+    badgeKey?: 'orders' | 'reviews' | 'referrals'
+}
+
+const navItems: NavItem[] = [
     { label: 'Overview', href: '/admin', icon: <IconDashboard /> },
-    { label: 'Orders', href: '/admin/orders', icon: <IconOrders />, badge: 3 },
+    { label: 'Orders', href: '/admin/orders', icon: <IconOrders />, badgeKey: 'orders' },
     { label: 'Customers', href: '/admin/customers', icon: <IconCustomers /> },
     { label: 'Catalogue', href: '/admin/catalogue', icon: <IconCatalogue /> },
-    { label: 'Reviews', href: '/admin/reviews', icon: <IconReviews />, badge: 5 },
-    { label: 'Referrals', href: '/admin/referrals', icon: <IconReferrals /> },
+    { label: 'Reviews', href: '/admin/reviews', icon: <IconReviews />, badgeKey: 'reviews' },
+    { label: 'Referrals', href: '/admin/referrals', icon: <IconReferrals />, badgeKey: 'referrals' },
     { label: 'Blog', href: '/admin/blog', icon: <IconBlog /> },
     { label: 'Marketing', href: '/admin/marketing', icon: <IconMarketing /> },
     { label: 'Analytics', href: '/admin/analytics', icon: <IconAnalytics /> },
@@ -56,12 +66,67 @@ export function AdminSidebar() {
     const pathname = usePathname()
     const router = useRouter()
     const [profile, setProfile] = useState<AdminProfile>(INITIAL_ADMIN_PROFILE)
+    const [counts, setCounts] = useState<AdminSidebarCounts>({ orders: 0, reviews: 0, referrals: 0, inspections: 0 })
     const [isPopoverOpen, setIsPopoverOpen] = useState(false)
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
     const popoverRef = useRef<HTMLDivElement>(null)
 
+    const fetchCounts = async () => {
+        try {
+            const data = await getAdminSidebarCountsAction()
+
+            // Merge with client localStorage orders (if any created/updated locally)
+            const localOrders = getAllOrders()
+            const localInspectionOrders = localOrders.filter(
+                (o) =>
+                    o.status === 'INSPECTION' ||
+                    (!o.inspection?.isApproved && ((o.inspection?.photos && o.inspection.photos.length > 0) || !!o.inspection?.videoUrl))
+            )
+
+            const allInspectionOrderNumbers = new Set(data.inspectionOrderNumbers || [])
+            localInspectionOrders.forEach((o) => allInspectionOrderNumbers.add(o.orderNumber))
+
+            const totalInspections = Math.max(data.inspections || 0, allInspectionOrderNumbers.size)
+            const latestNumber = data.latestInspectionOrderNumber || localInspectionOrders[0]?.orderNumber
+            const latestGarment = data.latestInspectionGarment || localInspectionOrders[0]?.design?.name
+
+            setCounts({
+                ...data,
+                inspections: totalInspections,
+                latestInspectionOrderNumber: latestNumber,
+                latestInspectionGarment: latestGarment,
+            })
+        } catch (e) {
+            console.error('Failed to fetch sidebar counts:', e)
+            const localOrders = getAllOrders()
+            const localInspectionOrders = localOrders.filter(
+                (o) =>
+                    o.status === 'INSPECTION' ||
+                    (!o.inspection?.isApproved && ((o.inspection?.photos && o.inspection.photos.length > 0) || !!o.inspection?.videoUrl))
+            )
+            setCounts({
+                orders: localOrders.filter((o) => o.status === 'NEW').length,
+                reviews: 0,
+                referrals: 0,
+                inspections: localInspectionOrders.length,
+                latestInspectionOrderNumber: localInspectionOrders[0]?.orderNumber,
+                latestInspectionGarment: localInspectionOrders[0]?.design?.name,
+            })
+        }
+    }
+
+    useEffect(() => {
+        fetchCounts()
+        const handleUpdate = () => fetchCounts()
+        window.addEventListener('admin-counts-update', handleUpdate)
+        return () => {
+            window.removeEventListener('admin-counts-update', handleUpdate)
+        }
+    }, [])
+
     useEffect(() => {
         setProfile(getAdminProfile())
+        fetchCounts()
     }, [pathname])
 
     useEffect(() => {
@@ -87,11 +152,13 @@ export function AdminSidebar() {
         }
     }, [isPopoverOpen])
 
-    const handleConfirmLogout = () => {
+    const handleConfirmLogout = async () => {
         logoutAdmin()
+        await logoutAdminAction()
         setIsPopoverOpen(false)
         setShowLogoutConfirm(false)
         router.push('/admin/login?signed_out=1')
+        router.refresh()
     }
 
     const isActive = (href: string) =>
@@ -199,21 +266,25 @@ export function AdminSidebar() {
                                     <span style={{ fontSize: '0.85rem', fontWeight: active ? 600 : 500, flex: 1 }}>
                                         {item.label}
                                     </span>
-                                    {item.badge && (
-                                        <span
-                                            style={{
-                                                fontSize: '0.6875rem',
-                                                fontWeight: 700,
-                                                background: '#C4975A',
-                                                color: '#ffffff',
-                                                borderRadius: '20px',
-                                                padding: '2px 8px',
-                                                lineHeight: 1.3,
-                                            }}
-                                        >
-                                            {item.badge}
-                                        </span>
-                                    )}
+                                    {(() => {
+                                        const count = item.badgeKey ? counts[item.badgeKey] : 0
+                                        if (!count || count <= 0) return null
+                                        return (
+                                            <span
+                                                style={{
+                                                    fontSize: '0.6875rem',
+                                                    fontWeight: 700,
+                                                    background: '#C4975A',
+                                                    color: '#ffffff',
+                                                    borderRadius: '20px',
+                                                    padding: '2px 8px',
+                                                    lineHeight: 1.3,
+                                                }}
+                                            >
+                                                {count}
+                                            </span>
+                                        )
+                                    })()}
                                 </Link>
                             </li>
                         )
@@ -274,7 +345,7 @@ export function AdminSidebar() {
                 </div>
             </nav>
 
-            {/* Bottom promo card */}
+            {/* Bottom Video Inspection Card - Real Data */}
             <div style={{ padding: '10px 14px 16px 14px' }}>
                 <div
                     style={{
@@ -286,47 +357,79 @@ export function AdminSidebar() {
                         flexDirection: 'column',
                         gap: '12px',
                         boxShadow: '0 4px 14px rgba(44, 24, 16, 0.12)',
+                        border: (counts.inspections || 0) > 0 ? '1px solid rgba(196, 151, 90, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
                     }}
                 >
-                    <div
-                        style={{
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '10px',
-                            background: 'rgba(196, 151, 90, 0.18)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                    >
-                        <span style={{ fontSize: '1.15rem', color: '#C4975A' }}>✦</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div
+                            style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '10px',
+                                background: (counts.inspections || 0) > 0 ? 'rgba(196, 151, 90, 0.22)' : 'rgba(255, 255, 255, 0.08)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <span style={{ fontSize: '1.15rem', color: (counts.inspections || 0) > 0 ? '#C4975A' : '#A8998C' }}>
+                                {(counts.inspections || 0) > 0 ? '✦' : '✓'}
+                            </span>
+                        </div>
+                        {(counts.inspections || 0) > 0 && (
+                            <span
+                                style={{
+                                    fontSize: '0.6875rem',
+                                    fontWeight: 700,
+                                    color: '#1C0F07',
+                                    background: '#C4975A',
+                                    padding: '2px 8px',
+                                    borderRadius: '999px',
+                                    letterSpacing: '0.04em',
+                                }}
+                            >
+                                {counts.inspections} PENDING
+                            </span>
+                        )}
                     </div>
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#F2EDE6', lineHeight: 1.3, margin: 0 }}>
                             Video inspection
                         </p>
                         <p style={{ fontSize: '0.725rem', color: '#A8998C', lineHeight: 1.45, margin: 0 }}>
-                            2 garments waiting for pre-shipment review
+                            {(counts.inspections || 0) === 0
+                                ? 'All garments reviewed & approved'
+                                : (counts.inspections || 0) === 1
+                                ? '1 garment waiting for pre-shipment review'
+                                : `${counts.inspections} garments waiting for pre-shipment review`}
                         </p>
+                        {(counts.inspections || 0) > 0 && counts.latestInspectionOrderNumber && (
+                            <p style={{ fontSize: '0.675rem', color: '#C4975A', margin: '2px 0 0 0', fontWeight: 500 }}>
+                                Queue: #{counts.latestInspectionOrderNumber}
+                                {counts.latestInspectionGarment ? ` (${counts.latestInspectionGarment})` : ''}
+                            </p>
+                        )}
                     </div>
+
                     <Link
-                        href="/admin/orders?filter=inspection"
+                        href={(counts.inspections || 0) > 0 ? '/admin/orders?stage=INSPECTION' : '/admin/orders'}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             borderRadius: '8px',
                             padding: '9px 14px',
-                            background: '#C4975A',
+                            background: (counts.inspections || 0) > 0 ? '#C4975A' : 'rgba(255, 255, 255, 0.12)',
                             fontSize: '0.775rem',
                             fontWeight: 600,
                             color: '#ffffff',
                             textDecoration: 'none',
                             textAlign: 'center',
-                            transition: 'background 0.2s ease',
+                            transition: 'all 0.2s ease',
                         }}
                     >
-                        Review now
+                        {(counts.inspections || 0) > 0 ? `Review now (${counts.inspections})` : 'View orders pipeline'}
                     </Link>
                 </div>
             </div>

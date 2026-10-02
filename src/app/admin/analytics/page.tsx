@@ -97,7 +97,7 @@ export default function AnalyticsOverviewPage() {
                             margin: '0 0 4px',
                         }}
                     >
-                        Atelier Business Analytics
+                        Business Analytics
                     </h1>
                     <p style={{ fontSize: '13px', color: '#8C827A', margin: 0 }}>
                         Holistic cross-channel performance intelligence across commissions, revenue, client retention, and marketing.

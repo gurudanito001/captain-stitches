@@ -20,7 +20,6 @@ export default function BlogListingPage() {
   // Filtered posts (excluding the featured one, unless category filter is selected which shows all matching)
   const filteredPosts = useMemo(() => {
     return BLOG_POSTS.filter(post => {
-      // If filtering "All Journal", show all posts except the featured one in the grid
       if (activeFilter === 'All Journal') {
         return post.slug !== featuredPost.slug
       }
@@ -32,102 +31,215 @@ export default function BlogListingPage() {
     <>
       <Navbar />
 
-      <main id="main-content" className="bg-brown-900 min-h-screen pb-24" style={{ paddingTop: "150px", paddingBottom: "50px" }}>
-        <div className="container-brand">
+      <main id="main-content" className="bg-brown-950 min-h-screen">
+        {/* =========================================================================
+            SECTION 1: OBSIDIAN EDITORIAL HEADER (#0C0704)
+        ========================================================================= */}
+        <section
+          className="relative w-full bg-[#0C0704] text-cream-100 border-b border-brown-800/60"
+          style={{
+            paddingTop: 'clamp(6.5rem, 11vw, 9rem)',
+            paddingBottom: 'clamp(2.5rem, 5vw, 4rem)',
+          }}
+        >
+          <div
+            className="container-brand"
+            style={{
+              maxWidth: '1400px',
+              margin: '0 auto',
+              width: '100%',
+              paddingLeft: 'clamp(1.5rem, 5vw, 4rem)',
+              paddingRight: 'clamp(1.5rem, 5vw, 4rem)',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div className="max-w-3xl">
+              <span
+                className="inline-block text-[#C4975A] font-semibold text-xs tracking-[0.2em] uppercase"
+                style={{ marginBottom: '8px' }}
+              >
+                The Captain's Journal
+              </span>
+              <h1
+                className="font-serif text-cream-100 font-bold leading-tight"
+                style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)', marginBottom: '1rem' }}
+              >
+                Style, Heritage &amp; Craft
+              </h1>
+              <p
+                className="font-body text-stone-300 leading-relaxed"
+                style={{ fontSize: 'clamp(1rem, 1.25vw, 1.15rem)', maxWidth: '640px' }}
+              >
+                Tailoring essays, sartorial history, and fitting insights directly from our dual ateliers in Verona and Lagos.
+              </p>
+            </div>
 
-          {/* Header Title — Clean borderless header */}
-          <div className="pb-8" style={{ marginBottom: "40px" }}>
-            <SectionEyebrow label="The Journal" />
-            <h1 className="text-heading-xl text-cream-200 mt-2 font-normal">
-              Style &amp; Craft
-            </h1>
-            <p className="text-body text-stone-300 mt-4 max-w-xl">
-              Insights, case studies, and tailoring guides straight from our workshops in Verona and Lagos.
-            </p>
+            {/* Category Filter Pills */}
+            <div
+              className="flex items-center gap-3 overflow-x-auto no-scrollbar"
+              style={{ marginTop: '2.5rem' }}
+            >
+              {CATEGORIES.map(category => {
+                const isActive = activeFilter === category
+                return (
+                  <button
+                    key={category}
+                    onClick={() => setActiveFilter(category)}
+                    className={[
+                      'rounded-full font-semibold uppercase tracking-wider transition-all duration-300 shrink-0 cursor-pointer border',
+                      isActive
+                        ? 'bg-[#C4975A] text-[#0C0704] border-[#C4975A] shadow-lg shadow-[#C4975A]/20 font-bold'
+                        : 'bg-brown-900/60 text-stone-300 border-brown-800 hover:border-stone-500 hover:text-cream-100',
+                    ].join(' ')}
+                    style={{
+                      padding: '10px 22px',
+                      fontSize: '11px',
+                      letterSpacing: '0.12em',
+                    }}
+                  >
+                    {category}
+                  </button>
+                )
+              })}
+            </div>
           </div>
+        </section>
 
-          {/* Category Filter Tabs — Flat and borderless */}
-          <div className="flex overflow-x-auto gap-3 no-scrollbar" style={{ marginBottom: "12px" }}>
-            {CATEGORIES.map(category => {
-              const isActive = activeFilter === category
-              return (
-                <button
-                  key={category}
-                  onClick={() => setActiveFilter(category)}
-                  className={[
-                    'px-5 py-2.5 text-[10px] tracking-widest font-semibold uppercase transition-all duration-300 shrink-0 cursor-pointer select-none rounded-none border-0 outline-none',
-                    isActive
-                      ? 'bg-caramel-500 text-brown-900'
-                      : 'bg-brown-950/40 text-stone-300 hover:bg-brown-950/60 hover:text-cream-100',
-                  ].join(' ')}
+        {/* =========================================================================
+            SECTION 2: LUMINOUS ALABASTER FEATURED DISPATCH (#FAF6F0)
+        ========================================================================= */}
+        {activeFilter === 'All Journal' && featuredPost && (
+          <section
+            className="relative w-full bg-[#FAF6F0] text-[#140C07] border-b border-[#EBE3D7]"
+            style={{
+              paddingTop: 'clamp(3.5rem, 6vw, 5.5rem)',
+              paddingBottom: 'clamp(3.5rem, 6vw, 5.5rem)',
+            }}
+          >
+            <div
+              className="container-brand"
+              style={{
+                maxWidth: '1400px',
+                margin: '0 auto',
+                width: '100%',
+                paddingLeft: 'clamp(1.5rem, 5vw, 4rem)',
+                paddingRight: 'clamp(1.5rem, 5vw, 4rem)',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div className="mb-6 flex items-center justify-between">
+                <span
+                  className="text-[#C2410C] font-semibold text-xs tracking-[0.2em] uppercase"
                 >
-                  {category}
-                </button>
-              )
-            })}
-          </div>
+                  Featured Story
+                </span>
+                <span className="text-xs text-[#8A7A6E] uppercase tracking-wider font-semibold">
+                  Curated Dispatch
+                </span>
+              </div>
 
-          {/* Hero Section: Featured Post — Flat panel, borderless card */}
-          {activeFilter === 'All Journal' && featuredPost && (
-            <section className="animate-fadeIn" aria-labelledby="featured-post-title" style={{ marginBottom: "64px" }}>
               <Link
                 href={`/blog/${featuredPost.slug}`}
-                className="group grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-brown-950/40 p-8 md:p-12 hover:bg-brown-950/50 transition-colors duration-300"
+                className="group grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center rounded-3xl bg-white border border-[#EBE3D7] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500"
+                style={{ padding: 'clamp(1.5rem, 3.5vw, 2.5rem)' }}
               >
-                {/* Featured Image — No border */}
-                <div className="lg:col-span-7 relative h-[300px] md:h-[400px] w-full overflow-hidden bg-brown-950">
+                {/* Featured Image */}
+                <div
+                  className="lg:col-span-7 relative w-full rounded-2xl overflow-hidden bg-[#0C0704]"
+                  style={{ minHeight: '320px', height: 'clamp(320px, 42vh, 460px)' }}
+                >
                   <Image
                     src={featuredPost.image}
                     alt={featuredPost.title}
                     fill
-                    className="object-cover transition-transform duration-1000 group-hover:scale-[1.02]"
+                    className="object-cover transition-transform duration-1000 group-hover:scale-105"
                     priority
                     sizes="(max-width: 1024px) 100vw, 55vw"
                   />
-                  <div className="absolute top-4 left-4 bg-caramel-500 text-brown-950 px-3 py-1 font-body text-[9px] tracking-widest font-bold uppercase select-none">
-                    Featured
+                  <div
+                    className="absolute top-4 left-4 bg-[#C2410C] text-white rounded-full font-bold uppercase tracking-widest text-[9px] shadow-md"
+                    style={{ padding: '6px 14px' }}
+                  >
+                    Featured Story
                   </div>
                 </div>
 
-                {/* Featured Details */}
-                <div className="lg:col-span-5 flex flex-col gap-4">
-                  <div className="flex items-center gap-4 text-[10px] tracking-widest font-semibold uppercase text-caramel-500">
+                {/* Featured Content */}
+                <div className="lg:col-span-5 flex flex-col justify-center">
+                  <div className="flex items-center gap-3 text-xs tracking-widest font-semibold uppercase text-[#C4975A] mb-3">
                     <span>{featuredPost.category}</span>
-                    <span className="w-1 h-1 rounded-full bg-brown-600" />
-                    <span className="text-stone-500">{featuredPost.readTime}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C4975A]" />
+                    <span className="text-[#8A7A6E]">{featuredPost.readTime}</span>
                   </div>
 
-                  <h2 id="featured-post-title" className="font-display text-2xl md:text-3xl text-cream-200 group-hover:text-caramel-400 transition-colors duration-300 font-bold leading-tight">
+                  <h2
+                    className="font-serif text-[#140C07] group-hover:text-[#C2410C] transition-colors duration-300 font-bold leading-tight"
+                    style={{ fontSize: 'clamp(1.75rem, 2.5vw, 2.35rem)', marginBottom: '1rem' }}
+                  >
                     {featuredPost.title}
                   </h2>
 
-                  <p className="text-body text-stone-400 text-sm leading-relaxed">
+                  <p
+                    className="font-body text-[#52453B] text-sm leading-relaxed"
+                    style={{ marginBottom: '1.5rem', lineHeight: 1.7 }}
+                  >
                     {featuredPost.excerpt}
                   </p>
 
-                  <div className="flex items-center gap-4 mt-2">
-                    <span className="text-stone-500 text-[10px] tracking-wider uppercase font-semibold">
+                  <div className="flex items-center justify-between pt-4 border-t border-[#F2ECE1]">
+                    <span className="text-[#8A7A6E] text-xs uppercase tracking-wider font-semibold">
                       {featuredPost.date}
                     </span>
-                    <span className="accent-line w-8" />
-                    <span className="text-[10px] tracking-widest font-semibold uppercase text-cream-200 group-hover:text-caramel-400 transition-colors">
-                      Read Article
+                    <span className="text-xs tracking-widest font-bold uppercase text-[#C2410C] group-hover:translate-x-1 transition-transform inline-flex items-center gap-1.5">
+                      Read Full Story →
                     </span>
                   </div>
                 </div>
               </Link>
-            </section>
-          )}
+            </div>
+          </section>
+        )}
 
-          {/* Grid Layout: Regular Posts */}
-          <section>
-            {activeFilter !== 'All Journal' && (
-              <div className="mb-8">
-                <span className="text-[10px] text-stone-500 uppercase tracking-widest font-semibold">
-                  Showing Journal Category: {activeFilter}
+        {/* =========================================================================
+            SECTION 3: WARM SAND JOURNAL ARCHIVE (#F7F3EB)
+        ========================================================================= */}
+        <section
+          className="relative w-full bg-[#F7F3EB] text-[#140C07]"
+          style={{
+            paddingTop: 'clamp(4rem, 7vw, 6rem)',
+            paddingBottom: 'clamp(4rem, 7vw, 6rem)',
+          }}
+        >
+          <div
+            className="container-brand"
+            style={{
+              maxWidth: '1400px',
+              margin: '0 auto',
+              width: '100%',
+              paddingLeft: 'clamp(1.5rem, 5vw, 4rem)',
+              paddingRight: 'clamp(1.5rem, 5vw, 4rem)',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div className="flex items-end justify-between mb-8">
+              <div>
+                <span
+                  className="inline-block text-[#C2410C] font-semibold text-xs tracking-[0.2em] uppercase"
+                  style={{ marginBottom: '6px' }}
+                >
+                  Archive &amp; Chronicles
                 </span>
+                <h2
+                  className="font-serif font-normal leading-tight text-[#140C07]"
+                  style={{ fontSize: 'clamp(1.85rem, 3vw, 2.5rem)' }}
+                >
+                  {activeFilter === 'All Journal' ? 'Recent Articles' : `${activeFilter} Articles`}
+                </h2>
               </div>
-            )}
+              <span className="text-xs text-[#8A7A6E] font-semibold uppercase tracking-wider hidden sm:block">
+                {filteredPosts.length} articles
+              </span>
+            </div>
 
             {filteredPosts.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -135,67 +247,144 @@ export default function BlogListingPage() {
                   <Link
                     key={post.slug}
                     href={`/blog/${post.slug}`}
-                    className="group flex flex-col justify-between h-full bg-brown-950/40 p-6 hover:bg-brown-950/50 transition-colors duration-300"
+                    className="group flex flex-col justify-between rounded-3xl bg-white border border-[#EBE3D7] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 hover:-translate-y-1.5"
                     aria-label={`Read ${post.title}`}
                   >
                     <div>
-                      {/* Thumbnail Image — Borderless */}
-                      <div className="relative h-56 w-full overflow-hidden bg-brown-950">
+                      {/* Thumbnail Image */}
+                      <div className="relative h-60 w-full overflow-hidden bg-[#0C0704]">
                         <Image
                           src={post.image}
                           alt={post.title}
                           fill
-                          className="object-cover transition-transform duration-1000 group-hover:scale-[1.04]"
+                          className="object-cover transition-transform duration-700 group-hover:scale-105"
                           sizes="(max-width: 768px) 100vw, 33vw"
                         />
+                        <div className="absolute top-3 left-3 bg-[#0C0704]/80 backdrop-blur-md rounded-full px-3 py-1">
+                          <span className="text-[9px] text-[#C4975A] uppercase tracking-widest font-bold">
+                            {post.category}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Info Meta */}
-                      <div className="pt-5 flex flex-col gap-3">
-                        <div className="flex items-center gap-3 text-[9px] tracking-widest font-semibold uppercase text-caramel-500">
-                          <span>{post.category}</span>
-                          <span className="w-1 h-1 rounded-full bg-brown-800" />
-                          <span className="text-stone-500">{post.readTime}</span>
+                      {/* Content Info */}
+                      <div className="p-6">
+                        <div className="flex items-center gap-3 text-[10px] tracking-widest font-semibold uppercase text-[#8A7A6E] mb-2.5">
+                          <span>{post.readTime}</span>
+                          <span className="w-1 h-1 rounded-full bg-[#8A7A6E]" />
+                          <span>{post.date}</span>
                         </div>
 
-                        <h3 className="font-display text-lg text-cream-200 group-hover:text-caramel-400 transition-colors duration-300 font-bold leading-snug">
+                        <h3 className="font-serif text-lg font-bold text-[#140C07] group-hover:text-[#C2410C] transition-colors leading-snug mb-3">
                           {post.title}
                         </h3>
 
-                        <p className="text-body text-stone-400 text-xs leading-relaxed line-clamp-3">
+                        <p className="font-body text-[#52453B] text-xs leading-relaxed line-clamp-3">
                           {post.excerpt}
                         </p>
                       </div>
                     </div>
 
-                    {/* Bottom Date and Action — Faint border-t line */}
-                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-brown-900/40">
-                      <span className="text-stone-500 text-[9px] uppercase tracking-wider font-semibold">
-                        {post.date}
+                    <div className="px-6 pb-6 pt-3 border-t border-[#F2ECE1] flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#C2410C] group-hover:underline">
+                        Read Story
                       </span>
-                      <span className="text-[9px] tracking-widest font-bold uppercase text-caramel-400 group-hover:text-caramel-300 transition-colors">
-                        Read More
-                      </span>
+                      <span className="text-[#C2410C] font-bold text-sm">→</span>
                     </div>
                   </Link>
                 ))}
               </div>
             ) : (
-              /* Empty state — Flat panel box */
-              <div className="text-center p-12 bg-brown-950/40 max-w-md mx-auto flex flex-col items-center">
-                <p className="text-body text-stone-400 text-sm font-medium">
-                  No articles found in this category yet. Check back soon!
+              <div
+                className="rounded-3xl bg-white border border-[#EBE3D7] p-12 text-center max-w-md mx-auto"
+              >
+                <p className="text-sm text-[#52453B] font-body mb-4">
+                  No articles found in this specific category yet.
                 </p>
                 <button
                   onClick={() => setActiveFilter('All Journal')}
-                  className="mt-6 text-[10px] uppercase tracking-widest font-bold text-caramel-400 hover:text-caramel-300 cursor-pointer"
+                  className="rounded-full bg-[#0C0704] text-[#FAF6F0] px-6 py-2.5 text-xs uppercase tracking-widest font-semibold hover:bg-[#C4975A] hover:text-[#0C0704] transition-colors cursor-pointer"
                 >
-                  Reset Filters
+                  View All Journal Dispatches
                 </button>
               </div>
             )}
-          </section>
-        </div>
+          </div>
+        </section>
+
+        {/* =========================================================================
+            SECTION 4: ROYAL HERITAGE EMERALD PATRON INVITATION (#071A14)
+        ========================================================================= */}
+        <section
+          className="relative w-full bg-[#071A14] text-[#FAF6F0] border-t border-[#10B981]/20"
+          style={{
+            paddingTop: 'clamp(4.5rem, 8vw, 7rem)',
+            paddingBottom: 'clamp(4.5rem, 8vw, 7rem)',
+          }}
+        >
+          <div
+            className="container-brand"
+            style={{
+              maxWidth: '1400px',
+              margin: '0 auto',
+              width: '100%',
+              paddingLeft: 'clamp(1.5rem, 5vw, 4rem)',
+              paddingRight: 'clamp(1.5rem, 5vw, 4rem)',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div
+              className="rounded-3xl border border-[#10B981]/30 bg-[#0C0704]/70 p-8 sm:p-14 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8"
+            >
+              <div className="max-w-xl">
+                <span
+                  className="inline-block text-[#34D399] font-semibold text-xs tracking-[0.2em] uppercase"
+                  style={{ marginBottom: '6px' }}
+                >
+                  Bespoke Commission
+                </span>
+                <h2
+                  className="font-serif text-cream-100 font-bold leading-tight"
+                  style={{ fontSize: 'clamp(2rem, 3.5vw, 2.75rem)', marginBottom: '1rem' }}
+                >
+                  Dress with Sovereign Precision
+                </h2>
+                <p className="font-body text-stone-300 text-sm leading-relaxed">
+                  Crafted by master tailors in Nigeria, measured and verified in Verona, and delivered directly to your doorstep in Italy or anywhere in Europe.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4 shrink-0 w-full md:w-auto">
+                <Button
+                  href="/catalogue"
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto"
+                  style={{
+                    padding: '14px 26px',
+                    borderRadius: '12px',
+                    borderColor: '#E8D4B0',
+                    color: '#E8D4B0',
+                  }}
+                >
+                  View Lookbook
+                </Button>
+                <Button
+                  href="/order"
+                  variant="primary"
+                  size="lg"
+                  className="w-full sm:w-auto"
+                  style={{
+                    padding: '14px 28px',
+                    borderRadius: '12px',
+                  }}
+                >
+                  Commission Now
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
 
       <Footer />

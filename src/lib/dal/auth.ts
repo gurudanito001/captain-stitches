@@ -79,6 +79,31 @@ export async function createSession(data: {
 }
 
 /**
+ * Fetch active session by token including user details.
+ */
+export const getSessionByToken = cache(async (token: string) => {
+    return prisma.session.findUnique({
+        where: { token },
+        include: {
+            user: {
+                select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    displayName: true,
+                    email: true,
+                    role: true,
+                    avatarInitials: true,
+                    avatarColor: true,
+                    isActive: true,
+                    location: true,
+                },
+            },
+        },
+    })
+})
+
+/**
  * Invalidate a specific device session by token.
  */
 export async function invalidateSession(token: string) {

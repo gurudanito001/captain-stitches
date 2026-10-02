@@ -364,6 +364,7 @@ export default function AdminNotificationPreferencesPage() {
                                                 borderRadius: '4px',
                                                 border: '1px solid #D1C9BE',
                                                 backgroundColor: '#FFFFFF',
+                                                color: '#2B2B2B',
                                             }}
                                         />
                                         <span style={{ fontSize: '11px', color: '#1C0F07' }}>days after SLA deadline</span>
@@ -471,6 +472,7 @@ export default function AdminNotificationPreferencesPage() {
                                     border: '1px solid #EDE8E1',
                                     backgroundColor: '#FAF7F2',
                                     fontSize: '12px',
+                                    color: '#2B2B2B',
                                     outline: 'none',
                                 }}
                             />
@@ -495,6 +497,7 @@ export default function AdminNotificationPreferencesPage() {
                                     border: '1px solid #EDE8E1',
                                     backgroundColor: '#FAF7F2',
                                     fontSize: '12px',
+                                    color: '#2B2B2B',
                                     outline: 'none',
                                 }}
                             />
@@ -588,6 +591,7 @@ export default function AdminNotificationPreferencesPage() {
                                     border: '1px solid #EDE8E1',
                                     backgroundColor: '#FAF7F2',
                                     fontSize: '12px',
+                                    color: '#2B2B2B',
                                     outline: 'none',
                                 }}
                             >
@@ -616,6 +620,7 @@ export default function AdminNotificationPreferencesPage() {
                                     border: '1px solid #EDE8E1',
                                     backgroundColor: '#FAF7F2',
                                     fontSize: '12px',
+                                    color: '#2B2B2B',
                                     outline: 'none',
                                 }}
                             />

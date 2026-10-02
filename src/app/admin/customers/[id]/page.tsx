@@ -7,10 +7,17 @@ import { useParams, useRouter } from 'next/navigation'
 import {
     AdminCustomer,
     CustomerMeasurementsCm,
-    getAllCustomers,
-    saveCustomer,
-    deleteCustomer,
 } from '@/data/adminCustomersData'
+import {
+    getCustomerByIdAdminAction,
+    updateCustomerPersonalAction,
+    updateCustomerMeasurementAction,
+    addCustomerAdminNoteAction,
+    deleteCustomerAdminAction,
+    toggleCustomerEmailSubAction,
+    mergeCustomerAdminAction,
+    getAllAdminCustomersAction,
+} from '@/lib/actions/customers'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
 const IconArrowLeft = () => (
@@ -51,6 +58,9 @@ export default function CustomerProfilePage() {
     const customerId = params?.id as string
 
     const [customer, setCustomer] = useState<AdminCustomer | null>(null)
+    const [allCustomersList, setAllCustomersList] = useState<AdminCustomer[]>([])
+    const [isLoading, setIsLoading] = useState(true)
+    const [isSaving, setIsSaving] = useState(false)
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const [copiedRef, setCopiedRef] = useState(false)
     const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -99,25 +109,43 @@ export default function CustomerProfilePage() {
     const [showMergeModal, setShowMergeModal] = useState(false)
     const [mergeTargetId, setMergeTargetId] = useState('')
 
-    // Load customer
-    useEffect(() => {
-        const all = getAllCustomers()
-        const found = all.find((c) => c.id === customerId || c.name.toLowerCase() === customerId.toLowerCase())
-        if (found) {
-            setCustomer(found)
-            setPersonalForm({
-                name: found.name,
-                email: found.email,
-                phone: found.phone,
-                whatsapp: found.whatsapp,
-                language: found.language,
-                currency: found.currency,
-                location: found.location,
-                address: found.address,
-            })
-            setMeasurementsForm({ ...found.measurements })
+    // Load customer from database
+    const loadCustomer = React.useCallback(async () => {
+        setIsLoading(true)
+        try {
+            const res = await getCustomerByIdAdminAction(customerId)
+            if (res.success && res.customer) {
+                setCustomer(res.customer)
+                setPersonalForm({
+                    name: res.customer.name,
+                    email: res.customer.email,
+                    phone: res.customer.phone,
+                    whatsapp: res.customer.whatsapp,
+                    language: res.customer.language,
+                    currency: res.customer.currency,
+                    location: res.customer.location,
+                    address: res.customer.address,
+                })
+                setMeasurementsForm({ ...res.customer.measurements })
+            } else {
+                setCustomer(null)
+            }
+
+            const allRes = await getAllAdminCustomersAction()
+            if (allRes.success && allRes.customers) {
+                setAllCustomersList(allRes.customers)
+            }
+        } catch (err) {
+            console.error('Failed to load customer:', err)
+            setCustomer(null)
+        } finally {
+            setIsLoading(false)
         }
     }, [customerId])
+
+    useEffect(() => {
+        loadCustomer()
+    }, [loadCustomer])
 
     const showToast = (msg: string) => {
         setToastMessage(msg)
@@ -134,15 +162,40 @@ export default function CustomerProfilePage() {
         })
     }, [customer, orderStatusFilter, orderYearFilter])
 
+    if (isLoading) {
+        return (
+            <div style={{ padding: '4rem 2rem', textAlign: 'center', color: '#8A7A6E' }}>
+                <div
+                    style={{
+                        display: 'inline-block',
+                        width: '36px',
+                        height: '36px',
+                        border: '3px solid #EDE8E1',
+                        borderTopColor: '#C4975A',
+                        borderRadius: '50%',
+                        animation: 'spin 0.8s linear infinite',
+                    }}
+                />
+                <p style={{ marginTop: '1rem', fontSize: '0.9rem', fontWeight: 600, color: '#1C0F07' }}>
+                    Loading patron dossier...
+                </p>
+                <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+            </div>
+        )
+    }
+
     if (!customer) {
         return (
             <div style={{ padding: '3rem', textAlign: 'center' }}>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1C0F07' }}>Customer not found</h2>
+                <p style={{ fontSize: '0.85rem', color: '#8A7A6E', marginTop: '0.5rem' }}>
+                    The requested client identifier does not match any record in the database.
+                </p>
                 <Link
                     href="/admin/customers"
                     style={{
                         display: 'inline-block',
-                        marginTop: '1rem',
+                        marginTop: '1.25rem',
                         padding: '0.625rem 1.25rem',
                         backgroundColor: '#C4975A',
                         color: '#FFFFFF',
@@ -176,69 +229,133 @@ export default function CustomerProfilePage() {
     }
 
     // Save personal details
-    const handleSavePersonal = (e: React.FormEvent) => {
+    const handleSavePersonal = async (e: React.FormEvent) => {
         e.preventDefault()
-        const updated: AdminCustomer = {
-            ...customer,
-            ...personalForm,
+        setIsSaving(true)
+        try {
+            const res = await updateCustomerPersonalAction(customer.id, personalForm)
+            if (res.success) {
+                setCustomer((prev) => (prev ? { ...prev, ...personalForm } : null))
+                setIsEditingPersonal(false)
+                showToast('Personal details updated in database')
+            } else {
+                showToast(res.error || 'Failed to update personal details')
+            }
+        } catch (err: any) {
+            showToast(err.message || 'Error updating personal details')
+        } finally {
+            setIsSaving(false)
         }
-        saveCustomer(updated)
-        setCustomer(updated)
-        setIsEditingPersonal(false)
-        showToast('Personal details updated')
     }
 
     // Save measurements
-    const handleSaveMeasurements = (e: React.FormEvent) => {
+    const handleSaveMeasurements = async (e: React.FormEvent) => {
         e.preventDefault()
-        const now = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        const updated: AdminCustomer = {
-            ...customer,
-            measurements: {
-                ...measurementsForm,
-                lastUpdated: now,
-            },
+        setIsSaving(true)
+        try {
+            const res = await updateCustomerMeasurementAction(customer.id, {
+                unit: 'cm',
+                chest: measurementsForm.chest,
+                shoulder: measurementsForm.shoulder,
+                sleeve: measurementsForm.sleeve,
+                waist: measurementsForm.waist,
+                hips: measurementsForm.hips,
+                inseam: measurementsForm.inseam,
+                neck: measurementsForm.neck,
+                length: measurementsForm.length,
+                fitNotes: measurementsForm.fitNotes,
+            })
+            if (res.success) {
+                const now = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                setCustomer((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              measurements: {
+                                  ...measurementsForm,
+                                  lastUpdated: now,
+                              },
+                          }
+                        : null
+                )
+                setIsEditingMeasurements(false)
+                showToast('Measurements saved to database and will auto-fill future orders')
+            } else {
+                showToast(res.error || 'Failed to save measurements')
+            }
+        } catch (err: any) {
+            showToast(err.message || 'Error saving measurements')
+        } finally {
+            setIsSaving(false)
         }
-        saveCustomer(updated)
-        setCustomer(updated)
-        setIsEditingMeasurements(false)
-        showToast('Measurements saved and will auto-fill future orders')
     }
 
     // Add Admin Note
-    const handleAddAdminNote = (e: React.FormEvent) => {
+    const handleAddAdminNote = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!newAdminNote.trim()) return
-        const updated: AdminCustomer = {
-            ...customer,
-            adminNotes: [
-                {
-                    id: `cn-${Date.now()}`,
-                    author: 'Samuelson (Admin)',
-                    text: newAdminNote.trim(),
-                    timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-                },
-                ...customer.adminNotes,
-            ],
+        setIsSaving(true)
+        try {
+            const res = await addCustomerAdminNoteAction(customer.id, newAdminNote.trim())
+            if (res.success) {
+                const dateStr = new Date().toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                })
+                setCustomer((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              adminNotes: [
+                                  {
+                                      id: `cn-${Date.now()}`,
+                                      author: 'Samuelson (Admin)',
+                                      text: newAdminNote.trim(),
+                                      timestamp: dateStr,
+                                  },
+                                  ...prev.adminNotes,
+                              ],
+                          }
+                        : null
+                )
+                setNewAdminNote('')
+                showToast('Admin note saved to database')
+            } else {
+                showToast(res.error || 'Failed to save admin note')
+            }
+        } catch (err: any) {
+            showToast(err.message || 'Error saving admin note')
+        } finally {
+            setIsSaving(false)
         }
-        saveCustomer(updated)
-        setCustomer(updated)
-        setNewAdminNote('')
-        showToast('Admin note appended')
     }
 
     // Toggle email subscription
-    const handleToggleEmailSub = () => {
-        const updated: AdminCustomer = {
-            ...customer,
-            emailMarketing: {
-                ...customer.emailMarketing,
-                isSubscribed: !customer.emailMarketing.isSubscribed,
-            },
+    const handleToggleEmailSub = async () => {
+        const nextSub = !customer.emailMarketing.isSubscribed
+        try {
+            const res = await toggleCustomerEmailSubAction(customer.id, nextSub)
+            if (res.success) {
+                setCustomer((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              emailMarketing: {
+                                  ...prev.emailMarketing,
+                                  isSubscribed: nextSub,
+                              },
+                          }
+                        : null
+                )
+                showToast(`Email status updated to ${nextSub ? 'Subscribed' : 'Unsubscribed'}`)
+            } else {
+                showToast(res.error || 'Failed to toggle email status')
+            }
+        } catch (err: any) {
+            showToast(err.message || 'Error updating email status')
         }
-        saveCustomer(updated)
-        setCustomer(updated)
-        showToast(`Email status updated to ${updated.emailMarketing.isSubscribed ? 'Subscribed' : 'Unsubscribed'}`)
     }
 
     // Issue manual reward
@@ -267,18 +384,48 @@ export default function CustomerProfilePage() {
             ...customer,
             referrals: [updatedReferrals],
         }
-        saveCustomer(updated)
         setCustomer(updated)
         setShowRewardModal(false)
         showToast(`Reward issued: ${rewardType} (${rewardValue})`)
     }
 
     // Delete customer handler
-    const handleDeleteCustomer = () => {
+    const handleDeleteCustomer = async () => {
         setIsMenuOpen(false)
-        if (confirm(`Are you sure you want to permanently delete ${customer.name}? This cannot be undone.`)) {
-            deleteCustomer(customer.id)
-            router.push('/admin/customers')
+        if (confirm(`Are you sure you want to permanently delete ${customer.name}? This will remove all their records from the database.`)) {
+            setIsSaving(true)
+            try {
+                const res = await deleteCustomerAdminAction(customer.id)
+                if (res.success) {
+                    router.push('/admin/customers')
+                } else {
+                    showToast(res.error || 'Failed to delete customer')
+                    setIsSaving(false)
+                }
+            } catch (err: any) {
+                showToast(err.message || 'Error deleting customer')
+                setIsSaving(false)
+            }
+        }
+    }
+
+    // Merge customer handler
+    const handleConfirmMerge = async () => {
+        if (!mergeTargetId) return
+        setIsSaving(true)
+        try {
+            const res = await mergeCustomerAdminAction(mergeTargetId, customer.id)
+            if (res.success) {
+                setShowMergeModal(false)
+                showToast('Client records successfully merged')
+                await loadCustomer()
+            } else {
+                showToast(res.error || 'Failed to merge client records')
+            }
+        } catch (err: any) {
+            showToast(err.message || 'Error merging records')
+        } finally {
+            setIsSaving(false)
         }
     }
 
@@ -1483,7 +1630,7 @@ export default function CustomerProfilePage() {
                             style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
                         >
                             <option value="">Select client to merge...</option>
-                            {getAllCustomers()
+                            {allCustomersList
                                 .filter((c) => c.id !== customer.id)
                                 .map((c) => (
                                     <option key={c.id} value={c.id}>
@@ -1502,23 +1649,20 @@ export default function CustomerProfilePage() {
                             </button>
                             <button
                                 type="button"
-                                disabled={!mergeTargetId}
-                                onClick={() => {
-                                    setShowMergeModal(false)
-                                    showToast('Client records successfully merged')
-                                }}
+                                disabled={!mergeTargetId || isSaving}
+                                onClick={handleConfirmMerge}
                                 style={{
                                     padding: '0.5rem 1.25rem',
                                     borderRadius: '8px',
                                     border: 'none',
-                                    backgroundColor: mergeTargetId ? '#C4975A' : '#E0D7CB',
+                                    backgroundColor: mergeTargetId && !isSaving ? '#C4975A' : '#E0D7CB',
                                     color: '#FFFFFF',
                                     fontWeight: 700,
                                     fontSize: '0.8rem',
-                                    cursor: mergeTargetId ? 'pointer' : 'not-allowed',
+                                    cursor: mergeTargetId && !isSaving ? 'pointer' : 'not-allowed',
                                 }}
                             >
-                                Confirm Merge
+                                {isSaving ? 'Merging...' : 'Confirm Merge'}
                             </button>
                         </div>
                     </div>

@@ -913,7 +913,7 @@ export default function AdminReferralDetailPage() {
 
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>
-                                    Internal Atelier Note
+                                    Internal Note
                                 </label>
                                 <textarea
                                     rows={3}

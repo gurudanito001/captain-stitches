@@ -400,6 +400,7 @@ model Design {
   // Dual-currency pricing
   priceNGN        Float
   priceEUR        Float
+  pricingNote     String?
 
   // Localised English
   nameEN          String

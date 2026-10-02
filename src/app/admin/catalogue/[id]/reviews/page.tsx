@@ -7,9 +7,8 @@ import { useParams, useRouter } from 'next/navigation'
 import {
     CatalogueDesign,
     DesignReviewItem,
-    getAllDesigns,
-    saveDesign,
 } from '@/data/adminCatalogueData'
+import { getDesignByIdAction } from '@/lib/actions/catalogue'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
 const IconArrowLeft = () => (
@@ -34,15 +33,27 @@ export default function DesignReviewsPage() {
     const designId = params?.id as string
 
     const [design, setDesign] = useState<CatalogueDesign | null>(null)
+    const [isLoading, setIsLoading] = useState(true)
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL')
     const [toastMessage, setToastMessage] = useState<string | null>(null)
 
-    // Load design
+    // Load design from database
     useEffect(() => {
-        const all = getAllDesigns()
-        const found = all.find((d) => d.id === designId || d.slug === designId)
-        if (found) {
-            setDesign(found)
+        let isMounted = true
+        const load = async () => {
+            setIsLoading(true)
+            try {
+                const res = await getDesignByIdAction(designId)
+                if (res.success && res.design && isMounted) {
+                    setDesign(res.design)
+                }
+            } finally {
+                if (isMounted) setIsLoading(false)
+            }
+        }
+        load()
+        return () => {
+            isMounted = false
         }
     }, [designId])
 
@@ -71,6 +82,25 @@ export default function DesignReviewsPage() {
         return counts
     }, [design])
 
+    if (isLoading) {
+        return (
+            <div style={{ padding: '4rem', textAlign: 'center' }}>
+                <div
+                    className="animate-spin"
+                    style={{
+                        display: 'inline-block',
+                        width: '36px',
+                        height: '36px',
+                        border: '3px solid #C4975A',
+                        borderTopColor: 'transparent',
+                        borderRadius: '50%',
+                    }}
+                />
+                <p style={{ marginTop: '1rem', color: '#8C7B6B', fontSize: '0.875rem' }}>Loading reviews...</p>
+            </div>
+        )
+    }
+
     if (!design) {
         return (
             <div style={{ padding: '3rem', textAlign: 'center' }}>
@@ -85,6 +115,7 @@ export default function DesignReviewsPage() {
                         color: '#FFFFFF',
                         borderRadius: '8px',
                         textDecoration: 'none',
+                        fontWeight: 600,
                     }}
                 >
                     Back to Catalogue
@@ -102,7 +133,6 @@ export default function DesignReviewsPage() {
             ...design,
             reviews: updatedReviews,
         }
-        saveDesign(updatedDesign)
         setDesign(updatedDesign)
         showToast(`Review marked as ${newStatus}`)
     }

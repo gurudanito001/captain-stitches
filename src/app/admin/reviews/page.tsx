@@ -6,12 +6,14 @@ import {
     AdminReviewItem,
     ReviewStatus,
     getAllReviews,
+    saveAllReviews,
     updateReviewStatus,
     flagReview,
     unflagReview,
     bulkUpdateReviewStatus,
     updateModeratorNote,
 } from '@/data/adminReviewsData'
+import { getAllReviewsAdminAction, updateReviewStatusAdminAction } from '@/lib/actions/reviews'
 
 type FilterTab = 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'
 type SortOption = 'newest' | 'oldest' | 'highest_rating' | 'lowest_rating'
@@ -54,8 +56,23 @@ export default function AdminReviewsQueuePage() {
     // Toast
     const [toastMessage, setToastMessage] = useState<string | null>(null)
 
+    // Load reviews from database on mount
+    const loadReviews = async () => {
+        try {
+            const res = await getAllReviewsAdminAction()
+            if (res.success && res.reviews && res.reviews.length > 0) {
+                setReviews(res.reviews)
+                saveAllReviews(res.reviews)
+            } else {
+                setReviews(getAllReviews())
+            }
+        } catch {
+            setReviews(getAllReviews())
+        }
+    }
+
     useEffect(() => {
-        setReviews(getAllReviews())
+        loadReviews()
     }, [])
 
     const showToast = (msg: string) => {
@@ -179,10 +196,14 @@ export default function AdminReviewsQueuePage() {
     }
 
     // Actions
-    const handleApproveSingle = (id: string) => {
+    const handleApproveSingle = async (id: string) => {
         const updated = updateReviewStatus(id, 'APPROVED')
         setReviews(updated)
         showToast('Review approved & published to storefront!')
+        await updateReviewStatusAdminAction(id, 'APPROVED').catch(console.error)
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
     }
 
     const handleOpenRejectModal = (id?: string) => {
@@ -193,7 +214,7 @@ export default function AdminReviewsQueuePage() {
         })
     }
 
-    const handleConfirmRejection = () => {
+    const handleConfirmRejection = async () => {
         if (!rejectionModal.reason.trim()) {
             alert('Please specify an internal reason for rejecting this review.')
             return
@@ -208,6 +229,11 @@ export default function AdminReviewsQueuePage() {
             )
             setReviews(updated)
             showToast('Review marked as Rejected.')
+            await updateReviewStatusAdminAction(
+                rejectionModal.reviewId,
+                'REJECTED',
+                rejectionModal.reason
+            ).catch(console.error)
         } else {
             // Bulk reject
             const updated = bulkUpdateReviewStatus(
@@ -216,20 +242,34 @@ export default function AdminReviewsQueuePage() {
                 rejectionModal.reason
             )
             setReviews(updated)
+            const count = selectedIds.length
+            selectedIds.forEach((id) => {
+                updateReviewStatusAdminAction(id, 'REJECTED', rejectionModal.reason).catch(console.error)
+            })
             setSelectedIds([])
-            showToast(`${selectedIds.length} reviews rejected.`)
+            showToast(`${count} reviews rejected.`)
+        }
+
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
         }
 
         setRejectionModal({ isOpen: false, reason: '' })
     }
 
-    const handleBulkApprove = () => {
+    const handleBulkApprove = async () => {
         if (selectedIds.length === 0) return
         const count = selectedIds.length
         const updated = bulkUpdateReviewStatus(selectedIds, 'APPROVED')
         setReviews(updated)
+        selectedIds.forEach((id) => {
+            updateReviewStatusAdminAction(id, 'APPROVED').catch(console.error)
+        })
         setSelectedIds([])
         showToast(`Successfully approved and published ${count} reviews!`)
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
     }
 
     const handleOpenFlagModal = (review: AdminReviewItem) => {
@@ -338,7 +378,7 @@ export default function AdminReviewsQueuePage() {
                         )}
                     </div>
                     <p style={{ margin: '6px 0 0', fontSize: '0.9375rem', color: '#6B7280' }}>
-                        Moderate, verify, and approve customer reviews before they appear on the public atelier showcase.
+                        Moderate, verify, and approve customer reviews before they appear on the public showcase.
                     </p>
                 </div>
             </div>
@@ -1579,7 +1619,7 @@ export default function AdminReviewsQueuePage() {
                             Flag Review for Follow-Up
                         </h3>
                         <p style={{ margin: '0 0 18px', fontSize: '0.875rem', color: '#6B7280' }}>
-                            Mark this review for personal atelier review (e.g. consult tailor Kolapo before publishing). Leave empty to remove flag.
+                            Mark this review for personal internal review (e.g. consult tailor before publishing). Leave empty to remove flag.
                         </p>
 
                         <textarea

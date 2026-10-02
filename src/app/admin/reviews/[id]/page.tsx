@@ -113,7 +113,7 @@ export default function AdminReviewDetailPage() {
                     Review Not Found
                 </h2>
                 <p style={{ color: '#6B7280', fontSize: '0.9375rem', marginBottom: '24px' }}>
-                    The requested review ID could not be found in the atelier records.
+                    The requested review ID could not be found in the database records.
                 </p>
                 <Link
                     href="/admin/reviews"
@@ -604,7 +604,7 @@ export default function AdminReviewDetailPage() {
                                     marginBottom: '8px',
                                 }}
                             >
-                                Private Atelier Notes (Only visible to admin team)
+                                Private Internal Notes (Only visible to admin team)
                             </label>
                             <textarea
                                 rows={3}

@@ -12,6 +12,8 @@ import {
     getAllOrders,
     updateOrder,
 } from '@/data/adminOrdersData'
+import { updateOrderStatusAdminAction } from '@/lib/actions/orders'
+import { parseColour } from '@/lib/utils/colours'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
 const IconArrowLeft = () => (
@@ -122,6 +124,10 @@ export default function OrderDetailPage() {
         updateOrder(updated)
         setOrder(updated)
         showToast(`Order status moved to ${newStatus}`)
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
+        updateOrderStatusAdminAction(order.id, newStatus).catch(() => {})
     }
 
     // Tailor change
@@ -239,6 +245,10 @@ export default function OrderDetailPage() {
         updateOrder(updated)
         setOrder(updated)
         showToast('Order inspected and signed off! Moved to Approved stage.')
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
+        updateOrderStatusAdminAction(order.id, 'APPROVED').catch(() => {})
     }
 
     // Add sample inspection photo
@@ -254,6 +264,9 @@ export default function OrderDetailPage() {
         updateOrder(updated)
         setOrder(updated)
         showToast('Artisan photo uploaded')
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
     }
 
     const currentStageMeta = STAGES_PIPELINE.find((s) => s.key === order.status) || STAGES_PIPELINE[0]
@@ -391,32 +404,28 @@ export default function OrderDetailPage() {
                             </select>
                         </div>
 
-                        {/* Tailor Assignment Dropdown */}
+                        {/* Tailor Assignment Input */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8A7A6E', textTransform: 'uppercase' }}>
                                 Tailor:
                             </span>
-                            <select
+                            <input
+                                type="text"
                                 value={order.tailorAssigned}
                                 onChange={(e) => handleTailorChange(e.target.value)}
+                                placeholder="Assign tailor..."
                                 style={{
                                     border: '1px solid #E0D7CB',
                                     backgroundColor: '#FAF7F2',
                                     color: '#1C0F07',
                                     fontSize: '0.8125rem',
                                     fontWeight: 600,
-                                    padding: '0.5rem 0.75rem',
+                                    padding: '0.45rem 0.65rem',
                                     borderRadius: '8px',
                                     outline: 'none',
-                                    cursor: 'pointer',
+                                    width: '160px',
                                 }}
-                            >
-                                {TAILORS_ROSTER.map((t) => (
-                                    <option key={t.id} value={t.name}>
-                                        {t.name}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </div>
 
                         {/* One-Tap WhatsApp Button */}
@@ -630,7 +639,29 @@ export default function OrderDetailPage() {
                                     </div>
                                     <div>
                                         <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: '#8A7A6E', fontWeight: 700 }}>Colour Choice</div>
-                                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#3A2B20', marginTop: '0.15rem' }}>{order.design.colour}</div>
+                                        {(() => {
+                                            const parsed = parseColour(order.design.colour || 'Bespoke')
+                                            return (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
+                                                    <span
+                                                        style={{
+                                                            width: '12px',
+                                                            height: '12px',
+                                                            borderRadius: '9999px',
+                                                            backgroundColor: parsed.hex,
+                                                            display: 'inline-block',
+                                                            border: '1px solid rgba(0,0,0,0.2)',
+                                                        }}
+                                                    />
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#3A2B20' }}>
+                                                        {parsed.name}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: '#8A7A6E', backgroundColor: '#FAF7F2', padding: '0.1rem 0.35rem', borderRadius: '4px', border: '1px solid #EAE3D9' }}>
+                                                        {parsed.hex}
+                                                    </span>
+                                                </div>
+                                            )
+                                        })()}
                                     </div>
                                     <div>
                                         <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: '#8A7A6E', fontWeight: 700 }}>Occasion</div>
@@ -657,7 +688,7 @@ export default function OrderDetailPage() {
                                     }}
                                 >
                                     <div>
-                                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#8A7A6E' }}>Estimated Atelier Delivery: </span>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#8A7A6E' }}>Estimated Delivery: </span>
                                         {isEditingEstDelivery ? (
                                             <input
                                                 type="date"
@@ -669,6 +700,8 @@ export default function OrderDetailPage() {
                                                     borderRadius: '6px',
                                                     border: '1px solid #C4975A',
                                                     fontSize: '0.82rem',
+                                                    color: '#2B2B2B',
+                                                    backgroundColor: '#FAF7F2',
                                                 }}
                                             />
                                         ) : (
@@ -1253,7 +1286,7 @@ export default function OrderDetailPage() {
                             Internal Admin Notes
                         </h2>
                         <p style={{ fontSize: '0.78rem', color: '#8A7A6E', margin: 0, marginBottom: '1rem' }}>
-                            Private atelier log. Never visible to the customer.
+                            Private internal log. Never visible to the customer.
                         </p>
 
                         {/* Existing Notes Thread */}
@@ -1291,6 +1324,7 @@ export default function OrderDetailPage() {
                                     borderRadius: '8px',
                                     border: '1px solid #E0D7CB',
                                     backgroundColor: '#FAF7F2',
+                                    color: '#2B2B2B',
                                     fontSize: '0.825rem',
                                     outline: 'none',
                                 }}

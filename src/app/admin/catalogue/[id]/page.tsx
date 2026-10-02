@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useParams, useRouter } from 'next/navigation'
@@ -9,11 +9,15 @@ import {
     CatalogueCategory,
     CATEGORY_OPTIONS,
     DesignPhoto,
-    getAllDesigns,
-    saveDesign,
-    deleteDesign,
-    duplicateDesign,
 } from '@/data/adminCatalogueData'
+import {
+    getDesignByIdAction,
+    updateDesignAction,
+    deleteDesignAction,
+    createDesignAction,
+} from '@/lib/actions/catalogue'
+import { AdminColourInput } from '@/components/admin/AdminColourInput'
+import { serializeColour, ColourOption } from '@/lib/utils/colours'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
 const IconArrowLeft = () => (
@@ -44,6 +48,21 @@ const IconTrash = () => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '13px', height: '13px', flexShrink: 0 }}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
 )
 
+const IconPlus = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '16px', height: '16px', flexShrink: 0 }}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+)
+
+const SAMPLE_DESIGNS = [
+    { label: 'Grand Agbada', url: '/images/design-agbada.jpg', caption: 'Grand Agbada Studio Look' },
+    { label: 'Classic Senator', url: '/images/design-senator.jpg', caption: 'Senator Bespoke Fit' },
+    { label: 'Italian 3-Piece', url: '/images/design-suit.jpg', caption: 'Tailored Italian 3-Piece' },
+    { label: 'Kaftan Royale', url: '/images/design-kaftan.jpg', caption: 'Kaftan Royale Geometric Embroidery' },
+    { label: 'Executive Suits', url: '/images/category-suits.jpg', caption: 'Double-Breasted Wool Suite' },
+    { label: 'Linen Casual', url: '/images/category-casual.jpg', caption: 'Bespoke Linen Lounge Set' },
+    { label: 'Native Brocade', url: '/images/category-native.jpeg', caption: 'Embroidered Guinea Brocade' },
+    { label: 'Editorial Tailoring (Unsplash)', url: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=800&q=80', caption: 'Editorial Luxury Suit Portrait' },
+]
+
 export default function DesignDetailEditPage() {
     const params = useParams()
     const router = useRouter()
@@ -52,6 +71,8 @@ export default function DesignDetailEditPage() {
     const [design, setDesign] = useState<CatalogueDesign | null>(null)
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const [toastMessage, setToastMessage] = useState<string | null>(null)
+    const [isLoading, setIsLoading] = useState(true)
+    const [isSaving, setIsSaving] = useState(false)
 
     // Form fields
     const [nameEN, setNameEN] = useState('')
@@ -76,12 +97,16 @@ export default function DesignDetailEditPage() {
     const [photos, setPhotos] = useState<DesignPhoto[]>([])
     const [previewPhoto, setPreviewPhoto] = useState<string | null>(null)
     const [draggedPhotoIdx, setDraggedPhotoIdx] = useState<number | null>(null)
+    const [imageUrlInput, setImageUrlInput] = useState('')
+    const [imageCaptionInput, setImageCaptionInput] = useState('')
+    const [imageAsCover, setImageAsCover] = useState(false)
+    const [photoError, setPhotoError] = useState<string | null>(null)
+    const imageUrlInputRef = useRef<HTMLInputElement>(null)
 
     // Fabrics & Colours
     const [fabrics, setFabrics] = useState<string[]>([])
     const [fabricInput, setFabricInput] = useState('')
-    const [colours, setColours] = useState<Array<{ name: string; hex?: string }>>([])
-    const [colourInput, setColourInput] = useState('')
+    const [colours, setColours] = useState<ColourOption[]>([])
 
     // SEO
     const [metaTitleEN, setMetaTitleEN] = useState('')
@@ -90,34 +115,49 @@ export default function DesignDetailEditPage() {
     const [metaDescriptionIT, setMetaDescriptionIT] = useState('')
     const [slug, setSlug] = useState('')
 
-    // Load design
+    const populateDesign = (found: CatalogueDesign) => {
+        setDesign(found)
+        setNameEN(found.contentEN.name)
+        setDescriptionEN(found.contentEN.description)
+        setTagsEN([...found.contentEN.tags])
+        setNameIT(found.contentIT.name)
+        setDescriptionIT(found.contentIT.description)
+        setTagsIT([...found.contentIT.tags])
+        setCategory(found.category)
+        setTurnaroundDays(found.turnaroundDays)
+        setIsVisible(found.isVisible)
+        setIsFeatured(found.isFeatured)
+        setSortOrder(found.sortOrder)
+        setPriceNGN(found.pricing.priceNGN)
+        setPriceEUR(found.pricing.priceEUR)
+        setPricingNote(found.pricing.pricingNote || '')
+        setPhotos([...found.photos])
+        setFabrics([...found.fabrics])
+        setColours(found.colours.map((c) => ({ name: c.name, hex: c.hex || '#1C1C1C' })))
+        setMetaTitleEN(found.seo.metaTitleEN)
+        setMetaDescriptionEN(found.seo.metaDescriptionEN)
+        setMetaTitleIT(found.seo.metaTitleIT)
+        setMetaDescriptionIT(found.seo.metaDescriptionIT)
+        setSlug(found.slug)
+    }
+
+    // Load design from database
     useEffect(() => {
-        const all = getAllDesigns()
-        const found = all.find((d) => d.id === designId || d.slug === designId)
-        if (found) {
-            setDesign(found)
-            setNameEN(found.contentEN.name)
-            setDescriptionEN(found.contentEN.description)
-            setTagsEN([...found.contentEN.tags])
-            setNameIT(found.contentIT.name)
-            setDescriptionIT(found.contentIT.description)
-            setTagsIT([...found.contentIT.tags])
-            setCategory(found.category)
-            setTurnaroundDays(found.turnaroundDays)
-            setIsVisible(found.isVisible)
-            setIsFeatured(found.isFeatured)
-            setSortOrder(found.sortOrder)
-            setPriceNGN(found.pricing.priceNGN)
-            setPriceEUR(found.pricing.priceEUR)
-            setPricingNote(found.pricing.pricingNote || '')
-            setPhotos([...found.photos])
-            setFabrics([...found.fabrics])
-            setColours([...found.colours])
-            setMetaTitleEN(found.seo.metaTitleEN)
-            setMetaDescriptionEN(found.seo.metaDescriptionEN)
-            setMetaTitleIT(found.seo.metaTitleIT)
-            setMetaDescriptionIT(found.seo.metaDescriptionIT)
-            setSlug(found.slug)
+        let isMounted = true
+        const load = async () => {
+            setIsLoading(true)
+            try {
+                const res = await getDesignByIdAction(designId)
+                if (res.success && res.design) {
+                    if (isMounted) populateDesign(res.design)
+                }
+            } finally {
+                if (isMounted) setIsLoading(false)
+            }
+        }
+        load()
+        return () => {
+            isMounted = false
         }
     }, [designId])
 
@@ -126,28 +166,7 @@ export default function DesignDetailEditPage() {
         setTimeout(() => setToastMessage(null), 3000)
     }
 
-    if (!design) {
-        return (
-            <div style={{ padding: '3rem', textAlign: 'center' }}>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1C0F07' }}>Design not found</h2>
-                <Link
-                    href="/admin/catalogue"
-                    style={{
-                        display: 'inline-block',
-                        marginTop: '1rem',
-                        padding: '0.625rem 1.25rem',
-                        backgroundColor: '#C4975A',
-                        color: '#FFFFFF',
-                        borderRadius: '8px',
-                        textDecoration: 'none',
-                        fontWeight: 600,
-                    }}
-                >
-                    Back to Catalogue
-                </Link>
-            </div>
-        )
-    }
+
 
     // Fabric tag handler
     const handleAddFabric = (e: React.KeyboardEvent) => {
@@ -163,22 +182,6 @@ export default function DesignDetailEditPage() {
 
     const handleRemoveFabric = (item: string) => {
         setFabrics(fabrics.filter((f) => f !== item))
-    }
-
-    // Colour tag handler
-    const handleAddColour = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            e.preventDefault()
-            const val = colourInput.trim()
-            if (val && !colours.some((c) => c.name.toLowerCase() === val.toLowerCase())) {
-                setColours([...colours, { name: val }])
-                setColourInput('')
-            }
-        }
-    }
-
-    const handleRemoveColour = (name: string) => {
-        setColours(colours.filter((c) => c.name !== name))
     }
 
     // Photo reordering (drag & drop)
@@ -214,29 +217,48 @@ export default function DesignDetailEditPage() {
         setPhotos(updated)
     }
 
-    const handleAddMockPhoto = () => {
-        const samples = [
-            '/images/design-agbada.jpg',
-            '/images/design-suit.jpg',
-            '/images/design-senator.jpg',
-            '/images/design-kaftan.jpg',
-            '/images/category-suits.jpg',
-            '/images/category-native.jpeg',
-        ]
-        const randomSrc = samples[Math.floor(Math.random() * samples.length)]
-        const newPhoto: DesignPhoto = {
-            id: `p-${Date.now()}`,
-            url: randomSrc,
-            isCover: photos.length === 0,
-            caption: 'Atelier fitting preview',
+    const handleAddPhotoUrl = (urlOverride?: string, captionOverride?: string) => {
+        setPhotoError(null)
+        const targetUrl = (urlOverride || imageUrlInput).trim()
+        const targetCaption = (captionOverride || imageCaptionInput).trim()
+
+        if (!targetUrl) {
+            setPhotoError('Please enter an image URL.')
+            return
         }
-        setPhotos([...photos, newPhoto])
-        showToast('Photo uploaded and auto-compressed')
+
+        if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('/') && !targetUrl.startsWith('data:image/')) {
+            setPhotoError('Image URL must begin with https://, http://, or / (for local assets).')
+            return
+        }
+
+        const newPhoto: DesignPhoto = {
+            id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            url: targetUrl,
+            isCover: imageAsCover || photos.length === 0,
+            caption: targetCaption || undefined,
+        }
+
+        if (newPhoto.isCover) {
+            setPhotos((prev) => [newPhoto, ...prev.map((p) => ({ ...p, isCover: false }))])
+        } else {
+            setPhotos((prev) => [...prev, newPhoto])
+        }
+
+        if (!urlOverride) {
+            setImageUrlInput('')
+            setImageCaptionInput('')
+            setImageAsCover(false)
+        }
+        showToast('Image URL added to gallery')
     }
 
-    // Save all changes
-    const handleSaveChanges = (e: React.FormEvent) => {
+    // Save all changes to database
+    const handleSaveChanges = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (!design) return
+
+        setIsSaving(true)
         const categoryLabel = CATEGORY_OPTIONS.find((c) => c.key === category)?.label || 'Bespoke'
 
         const updated: CatalogueDesign = {
@@ -278,9 +300,78 @@ export default function DesignDetailEditPage() {
             },
         }
 
-        saveDesign(updated)
-        setDesign(updated)
-        showToast('All changes saved successfully!')
+        const res = await updateDesignAction(design.id, {
+            nameEN: nameEN.trim(),
+            descriptionEN,
+            fabricOptionsEN: fabrics,
+            colourOptionsEN: colours.map((c) => serializeColour(c)),
+            nameIT: nameIT.trim(),
+            descriptionIT,
+            category,
+            turnaroundDays,
+            priceNGN,
+            priceEUR,
+            pricingNote: pricingNote.trim(),
+            isVisible,
+            isFeatured,
+            slug: slug.trim() || design.slug,
+            photos: photos.map((p, idx) => ({
+                url: p.url,
+                altText: p.caption || nameEN.trim(),
+                sortOrder: idx,
+                isPrimary: p.isCover ?? (idx === 0),
+            })),
+        })
+
+        setIsSaving(false)
+        if (res.success) {
+            setDesign(updated)
+            showToast('All changes saved successfully to database!')
+        } else {
+            showToast(`Failed to save: ${res.error}`)
+        }
+    }
+
+    if (isLoading) {
+        return (
+            <div style={{ padding: '4rem', textAlign: 'center' }}>
+                <div
+                    className="animate-spin"
+                    style={{
+                        display: 'inline-block',
+                        width: '36px',
+                        height: '36px',
+                        border: '3px solid #C4975A',
+                        borderTopColor: 'transparent',
+                        borderRadius: '50%',
+                    }}
+                />
+                <p style={{ marginTop: '1rem', color: '#8C7B6B', fontSize: '0.875rem' }}>Loading design details...</p>
+            </div>
+        )
+    }
+
+    if (!design) {
+        return (
+            <div style={{ padding: '3rem', textAlign: 'center' }}>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1C0F07' }}>Design not found</h2>
+                <Link
+                    href="/admin/catalogue"
+                    style={{
+                        display: 'inline-block',
+                        marginTop: '1rem',
+                        padding: '0.625rem 1.25rem',
+                        backgroundColor: '#C4975A',
+                        color: '#FFFFFF',
+                        borderRadius: '8px',
+                        textDecoration: 'none',
+                        fontWeight: 600,
+                    }}
+                >
+                    Back to Catalogue
+                </Link>
+            </div>
+        )
     }
 
     return (
@@ -468,11 +559,25 @@ export default function DesignDetailEditPage() {
                                 >
                                     <button
                                         type="button"
-                                        onClick={(e) => {
+                                        onClick={async (e) => {
                                             setIsMenuOpen(false)
-                                            duplicateDesign(design.id)
-                                            showToast('Design duplicated')
-                                            router.push('/admin/catalogue')
+                                            const dupRes = await createDesignAction({
+                                                category: design.category,
+                                                turnaroundDays: design.turnaroundDays,
+                                                priceNGN: design.pricing.priceNGN,
+                                                priceEUR: design.pricing.priceEUR,
+                                                nameEN: `${design.contentEN.name} (Copy)`,
+                                                descriptionEN: design.contentEN.description,
+                                                fabricOptionsEN: design.fabrics,
+                                                colourOptionsEN: design.colours.map(c => serializeColour(c)),
+                                                photos: design.photos.map(p => ({ url: p.url, isPrimary: p.isCover })),
+                                            })
+                                            if (dupRes.success) {
+                                                showToast('Design duplicated to database')
+                                                router.push('/admin/catalogue')
+                                            } else {
+                                                showToast(`Failed to duplicate: ${dupRes.error}`)
+                                            }
                                         }}
                                         style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '0.5rem 0.85rem', fontSize: '0.8rem', color: '#1C0F07', cursor: 'pointer' }}
                                     >
@@ -492,10 +597,10 @@ export default function DesignDetailEditPage() {
                                     <div style={{ height: '1px', backgroundColor: '#F3EFE9', margin: '0.25rem 0' }} />
                                     <button
                                         type="button"
-                                        onClick={() => {
+                                        onClick={async () => {
                                             setIsMenuOpen(false)
-                                            if (confirm(`Delete ${nameEN}?`)) {
-                                                deleteDesign(design.id)
+                                            if (confirm(`Are you sure you want to delete ${nameEN} from the database?`)) {
+                                                await deleteDesignAction(design.id)
                                                 router.push('/admin/catalogue')
                                             }
                                         }}
@@ -544,7 +649,10 @@ export default function DesignDetailEditPage() {
 
                             <button
                                 type="button"
-                                onClick={handleAddMockPhoto}
+                                onClick={() => {
+                                    imageUrlInputRef.current?.focus()
+                                    imageUrlInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                }}
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
@@ -559,9 +667,153 @@ export default function DesignDetailEditPage() {
                                     cursor: 'pointer',
                                 }}
                             >
-                                <IconUploadCloud />
-                                <span>+ Upload Photo</span>
+                                <IconPlus />
+                                <span>+ Add Image via URL</span>
                             </button>
+                        </div>
+
+                        {/* Add Image via URL Panel */}
+                        <div
+                            style={{
+                                backgroundColor: '#FAF7F2',
+                                borderRadius: '12px',
+                                border: '1px solid #EAE3D9',
+                                padding: '1rem',
+                                marginBottom: '1.25rem',
+                            }}
+                        >
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr auto', gap: '0.75rem', alignItems: 'flex-end' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
+                                        Image URL *
+                                    </label>
+                                    <input
+                                        ref={imageUrlInputRef}
+                                        type="text"
+                                        placeholder="https://images.unsplash.com/... or /images/design-suit.jpg"
+                                        value={imageUrlInput}
+                                        onChange={(e) => {
+                                            setImageUrlInput(e.target.value)
+                                            setPhotoError(null)
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault()
+                                                handleAddPhotoUrl()
+                                            }
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.55rem 0.75rem',
+                                            borderRadius: '8px',
+                                            border: '1px solid #D1C9BE',
+                                            backgroundColor: '#FFFFFF',
+                                            fontSize: '0.85rem',
+                                            color: '#2B2B2B',
+                                            outline: 'none',
+                                        }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
+                                        Caption / Description (Optional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Back view, embroidery detail"
+                                        value={imageCaptionInput}
+                                        onChange={(e) => setImageCaptionInput(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault()
+                                                handleAddPhotoUrl()
+                                            }
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.55rem 0.75rem',
+                                            borderRadius: '8px',
+                                            border: '1px solid #D1C9BE',
+                                            backgroundColor: '#FFFFFF',
+                                            fontSize: '0.85rem',
+                                            color: '#2B2B2B',
+                                            outline: 'none',
+                                        }}
+                                    />
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddPhotoUrl()}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem',
+                                        backgroundColor: '#C4975A',
+                                        color: '#FFFFFF',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        padding: '0.6rem 1.15rem',
+                                        fontSize: '0.825rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        boxShadow: '0 1px 3px rgba(196,151,90,0.3)',
+                                    }}
+                                >
+                                    <IconPlus />
+                                    <span>Add Image URL</span>
+                                </button>
+                            </div>
+
+                            {/* As Cover Checkbox */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.65rem' }}>
+                                <input
+                                    type="checkbox"
+                                    id="imageAsCoverCheck"
+                                    checked={imageAsCover}
+                                    onChange={(e) => setImageAsCover(e.target.checked)}
+                                    style={{ accentColor: '#C4975A', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="imageAsCoverCheck" style={{ fontSize: '0.75rem', color: '#6E5D4F', cursor: 'pointer' }}>
+                                    Set this image as the primary cover photo
+                                </label>
+                            </div>
+
+                            {photoError && (
+                                <p style={{ fontSize: '0.75rem', color: '#DC2626', margin: '0.5rem 0 0 0' }}>
+                                    {photoError}
+                                </p>
+                            )}
+
+                            {/* Quick Presets for Rapid Testing */}
+                            <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid #EAE3D9' }}>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#8A7A6E', textTransform: 'uppercase', display: 'block', marginBottom: '0.4rem' }}>
+                                    Quick Presets (Click to add reference photos):
+                                </span>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                    {SAMPLE_DESIGNS.map((sample) => (
+                                        <button
+                                            key={sample.label}
+                                            type="button"
+                                            onClick={() => handleAddPhotoUrl(sample.url, sample.caption)}
+                                            style={{
+                                                fontSize: '0.72rem',
+                                                backgroundColor: '#FFFFFF',
+                                                border: '1px solid #D1C9BE',
+                                                borderRadius: '6px',
+                                                padding: '0.25rem 0.6rem',
+                                                color: '#2B2B2B',
+                                                cursor: 'pointer',
+                                                fontWeight: 500,
+                                            }}
+                                        >
+                                            + {sample.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
 
                         {/* Thumbnails Horizontal Strip */}
@@ -594,7 +846,7 @@ export default function DesignDetailEditPage() {
                                         backgroundColor: '#FAF7F2',
                                     }}
                                 >
-                                    <Image src={p.url} alt="Catalogue photo" fill style={{ objectFit: 'cover' }} onClick={() => setPreviewPhoto(p.url)} />
+                                    <Image src={p.url} alt="Catalogue photo" fill style={{ objectFit: 'cover' }} unoptimized={p.url.startsWith('http')} onClick={() => setPreviewPhoto(p.url)} />
 
                                     {/* Cover Badge */}
                                     {p.isCover && (
@@ -646,7 +898,10 @@ export default function DesignDetailEditPage() {
 
                             {/* Drop area button */}
                             <div
-                                onClick={handleAddMockPhoto}
+                                onClick={() => {
+                                    imageUrlInputRef.current?.focus()
+                                    imageUrlInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                }}
                                 style={{
                                     width: '120px',
                                     height: '140px',
@@ -666,7 +921,7 @@ export default function DesignDetailEditPage() {
                                 }}
                             >
                                 <IconUploadCloud />
-                                <span>Add Photo</span>
+                                <span>+ Add by URL</span>
                             </div>
                         </div>
                     </div>
@@ -880,71 +1135,10 @@ export default function DesignDetailEditPage() {
                             </div>
                         </div>
 
-                        {/* Colours Tag Input */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
-                                Colour Options (Type & Press Enter)
-                            </label>
-                            <div
-                                style={{
-                                    display: 'flex',
-                                    flexWrap: 'wrap',
-                                    gap: '0.45rem',
-                                    padding: '0.5rem',
-                                    backgroundColor: '#FAF7F2',
-                                    borderRadius: '8px',
-                                    border: '1px solid #E0D7CB',
-                                    alignItems: 'center',
-                                }}
-                            >
-                                {colours.map((c) => (
-                                    <span
-                                        key={c.name}
-                                        style={{
-                                            backgroundColor: '#FFFFFF',
-                                            border: '1px solid #EAD8C3',
-                                            color: '#1C0F07',
-                                            fontSize: '0.8rem',
-                                            fontWeight: 600,
-                                            padding: '0.25rem 0.6rem',
-                                            borderRadius: '6px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.35rem',
-                                        }}
-                                    >
-                                        {c.hex && (
-                                            <span
-                                                style={{
-                                                    width: '10px',
-                                                    height: '10px',
-                                                    borderRadius: '9999px',
-                                                    backgroundColor: c.hex,
-                                                    display: 'inline-block',
-                                                    border: '1px solid #D1D5DB',
-                                                }}
-                                            />
-                                        )}
-                                        <span>{c.name}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveColour(c.name)}
-                                            style={{ border: 'none', background: 'transparent', color: '#A8998C', cursor: 'pointer', padding: 0, fontSize: '0.85rem' }}
-                                        >
-                                            ✕
-                                        </button>
-                                    </span>
-                                ))}
-                                <input
-                                    type="text"
-                                    placeholder="Add colour (e.g. Deep Burgundy)..."
-                                    value={colourInput}
-                                    onChange={(e) => setColourInput(e.target.value)}
-                                    onKeyDown={handleAddColour}
-                                    style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: '0.825rem', flex: '1 1 180px', padding: '0.25rem' }}
-                                />
-                            </div>
-                        </div>
+                        <AdminColourInput
+                            colours={colours}
+                            onChange={(updated) => setColours(updated)}
+                        />
                     </div>
 
                     {/* 5. Bilingual Content Section (EN and IT Tabs) */}

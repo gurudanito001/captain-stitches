@@ -1,20 +1,29 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { getAllDesignsAdminAction } from '@/lib/actions/catalogue'
+import {
+    getAllCustomersAdminAction,
+    updateCustomerMeasurementAction,
+    createCustomerAction,
+    DbCustomerItem,
+} from '@/lib/actions/customers'
 import {
     AdminOrder,
     CustomerProfile,
     Location,
     Currency,
     MeasurementProfile,
-    CUSTOMERS_DIRECTORY,
     TAILORS_ROSTER,
     getAllOrders,
     updateOrder,
 } from '@/data/adminOrdersData'
+import { createOrderAdminAction } from '@/lib/actions/orders'
+import { ColourSelector } from '@/components/common/ColourSelector'
+import { parseColour, ATELIER_PALETTE, ColourOption } from '@/lib/utils/colours'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
 const IconArrowLeft = () => (
@@ -34,62 +43,47 @@ const IconWhatsApp = () => (
 )
 
 const IconUploadCloud = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '24px', height: '24px', flexShrink: 0, color: '#C4975A' }}><polyline points="16 16 12 12 8 16" /><line x1="12" y1="12" x2="12" y2="21" /><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" /><polyline points="16 16 12 12 8 16" /></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '22px', height: '22px', flexShrink: 0, color: '#C4975A' }}><polyline points="16 16 12 12 8 16" /><line x1="12" y1="12" x2="12" y2="21" /><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" /><polyline points="16 16 12 12 8 16" /></svg>
 )
 
-// Catalogue designs list
-const CATALOGUE_DESIGNS = [
-    {
-        id: 'cat-1',
-        name: 'Grand Agbada',
-        category: 'Native Wear',
-        priceNGN: 120000,
-        priceEUR: 68,
-        image: '/images/design-agbada.jpg',
-        defaultFabrics: ['Imperial Royal Guinea Brocade', 'Swiss Voile Damask', 'Aso Oke Silk Accent'],
-        defaultColours: ['Obsidian Black & Gold', 'Emerald & Champagne', 'Midnight Navy', 'Pure White'],
-    },
-    {
-        id: 'cat-2',
-        name: 'Classic Senator',
-        category: 'Native Wear',
-        priceNGN: 85000,
-        priceEUR: 47,
-        image: '/images/design-senator.jpg',
-        defaultFabrics: ['Super 140s Wool Linen', 'Cashmere Cotton Blend', 'Italian Lightweight Crepe'],
-        defaultColours: ['Charcoal Grey with Burgundy Trim', 'Jet Black', 'Deep Navy', 'Warm Olive'],
-    },
-    {
-        id: 'cat-3',
-        name: 'Italian 3-Piece Suit',
-        category: 'English Suits',
-        priceNGN: 160000,
-        priceEUR: 90,
-        image: '/images/design-suit.jpg',
-        defaultFabrics: ['Super 150s Merino Wool (Biella)', 'Tropical Wool 130s', 'Herringbone Tweed'],
-        defaultColours: ['Midnight Navy Pinstripe', 'Slate Grey', 'Classic Black', 'Espresso Brown'],
-    },
-    {
-        id: 'cat-4',
-        name: 'Kaftan Royale',
-        category: 'Native Wear',
-        priceNGN: 75000,
-        priceEUR: 42,
-        image: '/images/design-kaftan.jpg',
-        defaultFabrics: ['Cashmere Wool Blend', 'High-twist Egyptian Cotton', 'Polished Linen'],
-        defaultColours: ['Emerald Green & Bronze', 'Burgundy Wine', 'Sand Stone', 'Ivory'],
-    },
-    {
-        id: 'cat-5',
-        name: 'Double-Breasted Executive Suit',
-        category: 'English Suits',
-        priceNGN: 195000,
-        priceEUR: 110,
-        image: '/images/design-suit.jpg',
-        defaultFabrics: ['Vitale Barberis Canonico Super 160s', 'Worsted Wool Flannel', 'Silk-Wool Blend'],
-        defaultColours: ['Rich Cocoa Brown', 'Chalkstripe Navy', 'Anthracite Charcoal'],
-    },
-]
+const IconLink = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '15px', height: '15px', flexShrink: 0 }}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+)
+
+const IconTrash = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '14px', height: '14px', flexShrink: 0 }}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+)
+
+const IconPhoto = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '15px', height: '15px', flexShrink: 0 }}><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+)
+
+export interface OrderCatalogueItem {
+    id: string
+    name: string
+    category: string
+    priceNGN: number
+    priceEUR: number
+    image: string
+    defaultFabrics: string[]
+    defaultColours: Array<ColourOption | string>
+}
+
+const DEFAULT_PLACEHOLDER_DESIGN: OrderCatalogueItem = {
+    id: 'placeholder',
+    name: 'Grand Agbada',
+    category: 'Native Wear',
+    priceNGN: 120000,
+    priceEUR: 68,
+    image: '/images/design-agbada.jpg',
+    defaultFabrics: ['Imperial Royal Guinea Brocade', 'Swiss Voile Damask', 'Aso Oke Silk Accent'],
+    defaultColours: [
+        { name: 'Obsidian Black & Gold', hex: '#1C1C1C' },
+        { name: 'Emerald & Champagne', hex: '#10B981' },
+        { name: 'Midnight Navy', hex: '#0B2240' },
+        { name: 'Pure White', hex: '#FFFFFF' },
+    ],
+}
 
 const STEPS = [
     { num: 1, title: 'Customer' },
@@ -104,9 +98,11 @@ export default function CreateOrderPage() {
     const router = useRouter()
     const [currentStep, setCurrentStep] = useState(1)
 
-    // ─── Step 1: Customer State ───────────────────────────────────────────────
+    // ─── Step 1: Customer State (Database-backed) ──────────────────────────────
+    const [dbCustomers, setDbCustomers] = useState<DbCustomerItem[]>([])
+    const [isLoadingCustomers, setIsLoadingCustomers] = useState(true)
     const [customerSearch, setCustomerSearch] = useState('')
-    const [selectedCustomer, setSelectedCustomer] = useState<CustomerProfile | null>(null)
+    const [selectedCustomer, setSelectedCustomer] = useState<DbCustomerItem | null>(null)
     const [isNewCustomer, setIsNewCustomer] = useState(false)
     const [newCustomer, setNewCustomer] = useState({
         name: '',
@@ -119,35 +115,192 @@ export default function CreateOrderPage() {
         currency: 'EUR' as Currency,
     })
 
-    // ─── Step 2: Design State ─────────────────────────────────────────────────
+    // ─── Step 2: Design State (Database-backed) ────────────────────────────────
+    const [catalogueDesigns, setCatalogueDesigns] = useState<OrderCatalogueItem[]>([])
+    const [isLoadingDesigns, setIsLoadingDesigns] = useState(true)
     const [designType, setDesignType] = useState<'catalogue' | 'custom'>('catalogue')
-    const [selectedDesign, setSelectedDesign] = useState(CATALOGUE_DESIGNS[0])
+    const [selectedDesign, setSelectedDesign] = useState<OrderCatalogueItem | null>(null)
     const [customDesign, setCustomDesign] = useState({
         name: '',
         category: 'Custom Commission',
-        image: '/images/design-agbada.jpg',
+        image: '',
         fabric: '',
         colour: '',
         specialInstructions: '',
     })
-    const [fabricChoice, setFabricChoice] = useState(CATALOGUE_DESIGNS[0].defaultFabrics[0])
-    const [colourChoice, setColourChoice] = useState(CATALOGUE_DESIGNS[0].defaultColours[0])
+    const [customImageMode, setCustomImageMode] = useState<'upload' | 'url'>('upload')
+    const [customImageUrlInput, setCustomImageUrlInput] = useState('')
+    const [customImageName, setCustomImageName] = useState('')
+    const [isDraggingFile, setIsDraggingFile] = useState(false)
+    const [customImageError, setCustomImageError] = useState<string | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+
+    const handleCustomImageFile = (file: File) => {
+        setCustomImageError(null)
+        if (!file.type.startsWith('image/')) {
+            setCustomImageError('Please select a valid image file (JPG, PNG, WebP, etc.)')
+            return
+        }
+        const maxBytes = 20 * 1024 * 1024 // 20MB
+        if (file.size > maxBytes) {
+            setCustomImageError('The image is larger than 20MB. Please select a smaller file.')
+            return
+        }
+        const formattedSize = file.size > 1024 * 1024
+            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+            : `${Math.round(file.size / 1024)} KB`
+
+        const reader = new FileReader()
+        reader.onload = (event) => {
+            const result = event.target?.result as string
+            if (result) {
+                setCustomDesign((prev) => ({ ...prev, image: result }))
+                setCustomImageName(`${file.name} (${formattedSize})`)
+            }
+        }
+        reader.onerror = () => {
+            setCustomImageError('Failed to read image file. Please try another image.')
+        }
+        reader.readAsDataURL(file)
+    }
+
+    const handleApplyCustomImageUrl = (urlToApply?: string) => {
+        const targetUrl = (urlToApply !== undefined ? urlToApply : customImageUrlInput).trim()
+        if (!targetUrl) {
+            setCustomImageError('Please enter or paste an image URL.')
+            return
+        }
+        if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('data:image/')) {
+            setCustomImageError('Please enter a valid URL starting with https://, http://, or data:image/')
+            return
+        }
+        setCustomImageError(null)
+        setCustomDesign((prev) => ({ ...prev, image: targetUrl }))
+        try {
+            const parsed = new URL(targetUrl)
+            const parts = parsed.pathname.split('/').filter(Boolean)
+            const filename = parts.length > 0 ? parts[parts.length - 1] : parsed.hostname
+            setCustomImageName(filename.length > 30 ? `${filename.slice(0, 27)}...` : filename)
+        } catch {
+            setCustomImageName('External Web Image Reference')
+        }
+    }
+
+    const handleRemoveCustomImage = () => {
+        setCustomDesign((prev) => ({ ...prev, image: '' }))
+        setCustomImageName('')
+        setCustomImageUrlInput('')
+        setCustomImageError(null)
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+        }
+    }
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDraggingFile(true)
+    }
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDraggingFile(false)
+    }
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDraggingFile(false)
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleCustomImageFile(e.dataTransfer.files[0])
+        }
+    }
+
+    const handlePasteEvent = (e: React.ClipboardEvent) => {
+        const items = e.clipboardData?.items
+        if (items) {
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const file = items[i].getAsFile()
+                    if (file) {
+                        e.preventDefault()
+                        handleCustomImageFile(file)
+                        return
+                    }
+                }
+            }
+        }
+        const text = e.clipboardData.getData('text')?.trim()
+        if (text && (text.startsWith('http://') || text.startsWith('https://') || text.startsWith('data:image/'))) {
+            e.preventDefault()
+            setCustomImageUrlInput(text)
+            handleApplyCustomImageUrl(text)
+        }
+    }
+    const [fabricChoice, setFabricChoice] = useState('')
+    const [colourChoice, setColourChoice] = useState('')
     const [specialInstructions, setSpecialInstructions] = useState('')
+
+    // ─── Load Customers & Designs from PostgreSQL Database ───────────────────
+    useEffect(() => {
+        let isMounted = true
+        const loadInitialData = async () => {
+            // Load Customers
+            setIsLoadingCustomers(true)
+            const custRes = await getAllCustomersAdminAction()
+            if (custRes.success && isMounted) {
+                setDbCustomers(custRes.customers)
+            }
+            if (isMounted) setIsLoadingCustomers(false)
+
+            // Load Designs
+            setIsLoadingDesigns(true)
+            const designRes = await getAllDesignsAdminAction()
+            if (designRes.success && designRes.designs && isMounted) {
+                const mapped: OrderCatalogueItem[] = designRes.designs.map((d) => ({
+                    id: d.id,
+                    name: d.contentEN.name,
+                    category: d.categoryLabel,
+                    priceNGN: d.pricing.priceNGN,
+                    priceEUR: d.pricing.priceEUR,
+                    image: d.photos.find((p) => p.isCover)?.url || d.photos[0]?.url || '/images/design-agbada.jpg',
+                    defaultFabrics: d.fabrics.length ? d.fabrics : ['Imperial Guinea Brocade', 'Swiss Voile Damask'],
+                    defaultColours: d.colours && d.colours.length ? d.colours.map((c) => ({ name: c.name, hex: c.hex || '#1C1C1C' })) : [{ name: 'Obsidian Black', hex: '#1C1C1C' }, { name: 'Midnight Navy', hex: '#0B2240' }],
+                }))
+                setCatalogueDesigns(mapped)
+                if (mapped.length > 0) {
+                    setSelectedDesign(mapped[0])
+                    setFabricChoice(mapped[0].defaultFabrics[0] || '')
+                    const initCol = mapped[0].defaultColours[0]
+                    setColourChoice(typeof initCol === 'string' ? initCol : initCol?.name || '')
+                }
+            }
+            if (isMounted) setIsLoadingDesigns(false)
+        }
+
+        loadInitialData()
+        return () => {
+            isMounted = false
+        }
+    }, [])
 
     // ─── Step 3: Measurements State ───────────────────────────────────────────
     const [measurements, setMeasurements] = useState<MeasurementProfile>({
-        chest: 40,
-        shoulder: 18,
-        sleeve: 25,
-        waist: 34,
-        hips: 40,
-        inseam: 32,
-        neck: 16,
-        length: 42,
-        unit: 'inches',
+        chest: 102,
+        shoulder: 45,
+        sleeve: 62,
+        waist: 84,
+        hips: 100,
+        inseam: 80,
+        neck: 40,
+        length: 105,
+        unit: 'cm',
         fitNotes: '',
     })
     const [saveToProfile, setSaveToProfile] = useState(true)
+    const [isSavingMeasurements, setIsSavingMeasurements] = useState(false)
+    const [measurementSaveStatus, setMeasurementSaveStatus] = useState<string | null>(null)
 
     // ─── Step 4: Order Details State ──────────────────────────────────────────
     const [occasion, setOccasion] = useState('Wedding Celebration')
@@ -157,7 +310,7 @@ export default function CreateOrderPage() {
     const [currency, setCurrency] = useState<Currency>('EUR')
     const [estimatedDeliveryDate, setEstimatedDeliveryDate] = useState('2026-06-22')
     const [customerNotes, setCustomerNotes] = useState('')
-    const [assignedTailor, setAssignedTailor] = useState(TAILORS_ROSTER[0].name)
+    const [assignedTailor, setAssignedTailor] = useState('')
 
     // ─── Step 5: Pricing & Payment State ──────────────────────────────────────
     const [totalAmount, setTotalAmount] = useState(68)
@@ -165,68 +318,147 @@ export default function CreateOrderPage() {
     const [paymentMethod, setPaymentMethod] = useState<'Stripe' | 'Paystack' | 'Manual Bank Transfer' | 'Cash'>('Stripe')
     const [markDepositAsPaid, setMarkDepositAsPaid] = useState(false)
 
-    // Autocomplete customers search
+    // Autocomplete customers search against database records
     const filteredCustomers = useMemo(() => {
         if (!customerSearch.trim()) return []
-        const q = customerSearch.toLowerCase()
-        return CUSTOMERS_DIRECTORY.filter(
-            (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.email.toLowerCase().includes(q)
+        const q = customerSearch.toLowerCase().trim()
+        return dbCustomers.filter(
+            (c) =>
+                c.name.toLowerCase().includes(q) ||
+                c.phone.includes(q) ||
+                c.whatsapp.includes(q) ||
+                c.email.toLowerCase().includes(q)
         )
-    }, [customerSearch])
+    }, [customerSearch, dbCustomers])
 
-    // Select existing customer
-    const handleSelectCustomer = (customer: CustomerProfile) => {
+    // Select existing customer from database
+    const handleSelectCustomer = (customer: DbCustomerItem) => {
         setSelectedCustomer(customer)
         setIsNewCustomer(false)
         setFullAddress(customer.address)
         setDeliveryLocation(customer.location)
         setCurrency(customer.currency)
         setMeasurements({ ...customer.savedMeasurements })
+        setMeasurementSaveStatus(null)
         setCustomerSearch('')
 
         // Adjust prices if currency switched
-        if (customer.currency === 'NGN') {
-            setTotalAmount(selectedDesign.priceNGN)
-            setDepositAmount(Math.round(selectedDesign.priceNGN / 2))
-            setPaymentMethod('Paystack')
+        if (selectedDesign) {
+            if (customer.currency === 'NGN') {
+                setTotalAmount(selectedDesign.priceNGN)
+                setDepositAmount(Math.round(selectedDesign.priceNGN / 2))
+                setPaymentMethod('Paystack')
+            } else {
+                setTotalAmount(selectedDesign.priceEUR)
+                setDepositAmount(Math.round(selectedDesign.priceEUR / 2))
+                setPaymentMethod('Stripe')
+            }
+        }
+    }
+
+    // Save measurements directly to customer profile in database
+    const handleSaveMeasurementsToDb = async (measurementsToSave?: MeasurementProfile) => {
+        if (!selectedCustomer) return
+        const target = measurementsToSave || measurements
+        setIsSavingMeasurements(true)
+        setMeasurementSaveStatus(null)
+        const res = await updateCustomerMeasurementAction(selectedCustomer.id, {
+            unit: target.unit,
+            chest: target.chest,
+            shoulder: target.shoulder,
+            sleeve: target.sleeve,
+            waist: target.waist,
+            hips: target.hips,
+            inseam: target.inseam,
+            neck: target.neck,
+            length: target.length,
+            fitNotes: target.fitNotes,
+        })
+        setIsSavingMeasurements(false)
+        if (res.success) {
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            setMeasurementSaveStatus(`Saved to database at ${timeStr} ✓`)
+            setSelectedCustomer((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          savedMeasurements: { ...target, updatedAt: res.updatedAt },
+                          hasSavedMeasurements: true,
+                          measurementDate: res.updatedAt,
+                      }
+                    : null
+            )
+            setDbCustomers((prevList) =>
+                prevList.map((c) =>
+                    c.id === selectedCustomer.id
+                        ? {
+                              ...c,
+                              savedMeasurements: { ...target, updatedAt: res.updatedAt },
+                              hasSavedMeasurements: true,
+                              measurementDate: res.updatedAt,
+                          }
+                        : c
+                )
+            )
         } else {
-            setTotalAmount(selectedDesign.priceEUR)
-            setDepositAmount(Math.round(selectedDesign.priceEUR / 2))
-            setPaymentMethod('Stripe')
+            setMeasurementSaveStatus(`Failed to save: ${res.error}`)
         }
     }
 
     // Select design helper
-    const handleSelectDesign = (item: typeof CATALOGUE_DESIGNS[0]) => {
+    const handleSelectDesign = (item: OrderCatalogueItem) => {
         setSelectedDesign(item)
-        setFabricChoice(item.defaultFabrics[0])
-        setColourChoice(item.defaultColours[0])
+        setFabricChoice(item.defaultFabrics[0] || '')
+        const initCol = item.defaultColours[0]
+        setColourChoice(typeof initCol === 'string' ? initCol : initCol?.name || '')
         const total = currency === 'EUR' ? item.priceEUR : item.priceNGN
         setTotalAmount(total)
         setDepositAmount(Math.round(total / 2))
     }
 
     // Submit and create order
-    const handleCreateOrder = () => {
+    const handleCreateOrder = async () => {
+        let activeCustomer: CustomerProfile
+
+        if (isNewCustomer) {
+            const createdRes = await createCustomerAction({
+                name: newCustomer.name,
+                phone: newCustomer.phone,
+                whatsapp: newCustomer.whatsapp,
+                email: newCustomer.email,
+                location: newCustomer.location,
+                address: fullAddress || newCustomer.address,
+                language: newCustomer.language,
+                currency: newCustomer.currency,
+                measurements: measurements,
+            })
+            if (createdRes.success && createdRes.customer) {
+                activeCustomer = createdRes.customer
+            } else {
+                activeCustomer = {
+                    id: `cust-${Date.now()}`,
+                    name: newCustomer.name,
+                    phone: newCustomer.phone,
+                    whatsapp: newCustomer.whatsapp,
+                    email: newCustomer.email,
+                    location: newCustomer.location,
+                    address: fullAddress || newCustomer.address,
+                    language: newCustomer.language,
+                    currency: newCustomer.currency,
+                    savedMeasurements: measurements,
+                    totalOrders: 1,
+                }
+            }
+        } else {
+            activeCustomer = selectedCustomer || dbCustomers[0]
+            if (selectedCustomer && saveToProfile) {
+                await handleSaveMeasurementsToDb(measurements)
+            }
+        }
+
         const existingOrders = getAllOrders()
         const nextNumber = `CS-00${92 + existingOrders.length}`
         const newId = String(Date.now())
-
-        const activeCustomer: CustomerProfile = isNewCustomer
-            ? {
-                  id: `cust-${Date.now()}`,
-                  name: newCustomer.name,
-                  phone: newCustomer.phone,
-                  whatsapp: newCustomer.whatsapp,
-                  email: newCustomer.email,
-                  location: newCustomer.location,
-                  address: fullAddress || newCustomer.address,
-                  language: newCustomer.language,
-                  currency: newCustomer.currency,
-                  savedMeasurements: measurements,
-                  totalOrders: 1,
-              }
-            : selectedCustomer || CUSTOMERS_DIRECTORY[0]
 
         const createdOrder: AdminOrder = {
             id: newId,
@@ -237,10 +469,10 @@ export default function CreateOrderPage() {
             tailorAssigned: assignedTailor,
             customer: activeCustomer,
             design: {
-                id: designType === 'catalogue' ? selectedDesign.id : 'custom-design',
-                name: designType === 'catalogue' ? selectedDesign.name : customDesign.name || 'Custom Bespoke Creation',
-                category: designType === 'catalogue' ? selectedDesign.category : 'Bespoke Custom',
-                image: designType === 'catalogue' ? selectedDesign.image : customDesign.image,
+                id: designType === 'catalogue' ? (selectedDesign?.id || 'catalogue-item') : 'custom-design',
+                name: designType === 'catalogue' ? (selectedDesign?.name || 'Selected Design') : customDesign.name || 'Custom Bespoke Creation',
+                category: designType === 'catalogue' ? (selectedDesign?.category || 'Bespoke Custom') : 'Bespoke Custom',
+                image: designType === 'catalogue' ? (selectedDesign?.image || '/images/design-agbada.jpg') : (customDesign.image || '/images/design-agbada.jpg'),
                 isCustom: designType === 'custom',
                 fabric: designType === 'catalogue' ? fabricChoice : customDesign.fabric,
                 colour: designType === 'catalogue' ? colourChoice : customDesign.colour,
@@ -261,47 +493,101 @@ export default function CreateOrderPage() {
                 totalEUR: currency === 'EUR' ? totalAmount : Math.round(totalAmount / 1750),
                 depositAmount: depositAmount,
                 depositStatus: markDepositAsPaid ? 'PAID' : 'UNPAID',
-                depositPaidDate: markDepositAsPaid ? 'Just now' : undefined,
+                depositPaidDate: markDepositAsPaid ? new Date().toISOString() : undefined,
                 balanceAmount: totalAmount - depositAmount,
                 balanceStatus: 'UNPAID',
                 gateway: paymentMethod,
-                referenceNumber: `CS-MANUAL-${Math.floor(100000 + Math.random() * 900000)}`,
-                balancePaymentLink: `https://pay.captainstitches.com/pay/${nextNumber.toLowerCase()}`,
+                referenceNumber: `DEP-${Date.now().toString().slice(-6)}`,
+                balancePaymentLink: `https://captainstitches.com/pay/bal-${newId}`,
             },
             inspection: {
                 photos: [],
-                notes: 'Awaiting pattern cutting bench slot.',
+                notes: '',
                 isApproved: false,
             },
             adminNotes: [
                 {
-                    id: `an-${Date.now()}`,
-                    author: 'Samuelson',
-                    text: `Manually created order commissioned via WhatsApp consultation.`,
-                    timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    id: `note-${Date.now()}`,
+                    author: 'Samuelson Anaele',
+                    text: `Manual bespoke order created via admin panel for ${activeCustomer.name}.`,
+                    timestamp: new Date().toISOString(),
                 },
             ],
             notifications: [
                 {
                     id: `notif-${Date.now()}`,
-                    event: 'Manual Order Created',
+                    event: 'Order Created',
                     channel: 'WhatsApp',
-                    timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-                    details: `Confirmation sent to ${activeCustomer.whatsapp} with tracking ref ${nextNumber}.`,
+                    timestamp: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    details: `Initial bespoke commission order logged for ${activeCustomer.name}.`,
                 },
             ],
         }
 
-        updateOrder(createdOrder)
+        // Persist to PostgreSQL database
+        let finalId = newId
+        try {
+            const dbRes = await createOrderAdminAction({
+                orderNumber: nextNumber,
+                customerId: activeCustomer.id,
+                status: markDepositAsPaid ? 'CONFIRMED' : 'NEW',
+                deliveryLocation: deliveryLocation,
+                deliveryAddress: fullAddress,
+                occasion: occasion,
+                deadline: deadline,
+                estimatedDeliveryDate: estimatedDeliveryDate,
+                measurements: measurements,
+                currency: currency,
+                totalAmount: totalAmount,
+                depositAmount: depositAmount,
+                depositPaid: markDepositAsPaid,
+                paymentGateway: paymentMethod,
+                additionalNotes: customerNotes,
+                catalogueDesign: designType === 'catalogue' && selectedDesign ? {
+                    id: selectedDesign.id,
+                    name: selectedDesign.name,
+                    category: selectedDesign.category,
+                    image: selectedDesign.image,
+                    fabric: fabricChoice,
+                    colour: colourChoice,
+                    specialInstructions: specialInstructions,
+                } : undefined,
+                customDesign: designType === 'custom' ? {
+                    name: customDesign.name,
+                    image: customDesign.image,
+                    fabric: customDesign.fabric,
+                    colour: customDesign.colour,
+                    specialInstructions: customDesign.specialInstructions || specialInstructions,
+                } : undefined,
+                tailorAssigned: assignedTailor,
+            })
+
+            if (dbRes.success && dbRes.order) {
+                updateOrder(dbRes.order)
+                finalId = dbRes.order.id
+            } else {
+                updateOrder(createdOrder)
+            }
+        } catch (e) {
+            console.error('Error saving order to database:', e)
+            updateOrder(createdOrder)
+        }
+
+        // Notify sidebar & components to refresh database counts
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
 
         // Generate WhatsApp link confirmation
         const cleanPhone = activeCustomer.whatsapp.replace(/[^0-9]/g, '')
         const msg = encodeURIComponent(
-            `Hello ${activeCustomer.name}, your CaptainStitches bespoke order #${nextNumber} has been logged in our atelier! Estimated completion: ${estimatedDeliveryDate}. Tracking reference: https://captainstitches.com/orders/track?ref=${nextNumber}. Thank you!`
+            `Hello ${activeCustomer.name}, your CaptainStitches bespoke order #${nextNumber} has been logged in our system! Estimated completion: ${estimatedDeliveryDate}. Tracking reference: https://captainstitches.com/track?id=${nextNumber}. Thank you!`
         )
-        window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank')
+        if (cleanPhone) {
+            window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank')
+        }
 
-        router.push(`/admin/orders/${newId}`)
+        router.push(`/admin/orders/${finalId}`)
     }
 
     return (
@@ -362,7 +648,12 @@ export default function CreateOrderPage() {
                         <button
                             key={s.num}
                             type="button"
-                            onClick={() => setCurrentStep(s.num)}
+                            onClick={() => {
+                                if (currentStep === 3 && selectedCustomer && saveToProfile) {
+                                    handleSaveMeasurementsToDb(measurements)
+                                }
+                                setCurrentStep(s.num)
+                            }}
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -496,7 +787,7 @@ export default function CreateOrderPage() {
                                     </div>
 
                                     {/* Autocomplete dropdown */}
-                                    {filteredCustomers.length > 0 && (
+                                    {customerSearch.trim() && (
                                         <div
                                             style={{
                                                 position: 'absolute',
@@ -512,28 +803,34 @@ export default function CreateOrderPage() {
                                                 zIndex: 20,
                                             }}
                                         >
-                                            {filteredCustomers.map((c) => (
-                                                <div
-                                                    key={c.id}
-                                                    onClick={() => handleSelectCustomer(c)}
-                                                    style={{
-                                                        padding: '0.75rem 1rem',
-                                                        borderBottom: '1px solid #F3EFE9',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        justifyContent: 'space-between',
-                                                        alignItems: 'center',
-                                                    }}
-                                                >
-                                                    <div>
-                                                        <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#1C0F07' }}>{c.name}</div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#8A7A6E' }}>{c.whatsapp} • {c.email}</div>
+                                            {filteredCustomers.length > 0 ? (
+                                                filteredCustomers.map((c) => (
+                                                    <div
+                                                        key={c.id}
+                                                        onClick={() => handleSelectCustomer(c)}
+                                                        style={{
+                                                            padding: '0.75rem 1rem',
+                                                            borderBottom: '1px solid #F3EFE9',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                        }}
+                                                    >
+                                                        <div>
+                                                            <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#1C0F07' }}>{c.name}</div>
+                                                            <div style={{ fontSize: '0.75rem', color: '#8A7A6E' }}>{c.whatsapp} • {c.email}</div>
+                                                        </div>
+                                                        <span style={{ fontSize: '0.75rem', color: '#C4975A', fontWeight: 600 }}>
+                                                            Select Customer →
+                                                        </span>
                                                     </div>
-                                                    <span style={{ fontSize: '0.75rem', color: '#C4975A', fontWeight: 600 }}>
-                                                        Select Customer →
-                                                    </span>
+                                                ))
+                                            ) : (
+                                                <div style={{ padding: '1rem', textAlign: 'center', fontSize: '0.8rem', color: '#8A7A6E' }}>
+                                                    No database customers match &quot;{customerSearch}&quot;.
                                                 </div>
-                                            ))}
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -559,6 +856,9 @@ export default function CreateOrderPage() {
                                                 <span style={{ fontSize: '0.7rem', fontWeight: 700, backgroundColor: '#FFFFFF', padding: '0.15rem 0.45rem', borderRadius: '4px', color: '#C4975A' }}>
                                                     {selectedCustomer.location === 'Italy' ? '🇮🇹 Italy' : '🇳🇬 Nigeria'}
                                                 </span>
+                                                <span style={{ fontSize: '0.7rem', fontWeight: 600, backgroundColor: '#ECFDF5', color: '#065F46', padding: '0.15rem 0.45rem', borderRadius: '4px', border: '1px solid #A7F3D0' }}>
+                                                    Database Customer
+                                                </span>
                                             </div>
                                             <div style={{ fontSize: '0.8rem', color: '#6E5D4F', marginTop: '0.35rem' }}>
                                                 WhatsApp: {selectedCustomer.whatsapp} • Email: {selectedCustomer.email}
@@ -583,28 +883,36 @@ export default function CreateOrderPage() {
                                         </button>
                                     </div>
                                 ) : (
-                                    <div style={{ fontSize: '0.8rem', color: '#8A7A6E', fontStyle: 'italic' }}>
-                                        Or pick from quick recent contacts below:
-                                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                                            {CUSTOMERS_DIRECTORY.slice(0, 4).map((c) => (
-                                                <button
-                                                    key={c.id}
-                                                    type="button"
-                                                    onClick={() => handleSelectCustomer(c)}
-                                                    style={{
-                                                        padding: '0.35rem 0.75rem',
-                                                        borderRadius: '6px',
-                                                        border: '1px solid #E5DFD7',
-                                                        backgroundColor: '#FAF7F2',
-                                                        fontSize: '0.78rem',
-                                                        color: '#1C0F07',
-                                                        cursor: 'pointer',
-                                                    }}
-                                                >
-                                                    {c.name} ({c.location})
-                                                </button>
-                                            ))}
-                                        </div>
+                                    <div style={{ fontSize: '0.8rem', color: '#8A7A6E' }}>
+                                        {isLoadingCustomers ? (
+                                            <div>Loading patrons from database...</div>
+                                        ) : dbCustomers.length > 0 ? (
+                                            <div>
+                                                <span style={{ fontStyle: 'italic' }}>Pick from patrons saved in database:</span>
+                                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                                                    {dbCustomers.slice(0, 6).map((c) => (
+                                                        <button
+                                                            key={c.id}
+                                                            type="button"
+                                                            onClick={() => handleSelectCustomer(c)}
+                                                            style={{
+                                                                padding: '0.35rem 0.75rem',
+                                                                borderRadius: '6px',
+                                                                border: '1px solid #E5DFD7',
+                                                                backgroundColor: '#FAF7F2',
+                                                                fontSize: '0.78rem',
+                                                                color: '#1C0F07',
+                                                                cursor: 'pointer',
+                                                            }}
+                                                        >
+                                                            {c.name} ({c.location})
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div>No customer records in database yet. Use <strong>+ Create New Customer</strong> above.</div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -735,119 +1043,131 @@ export default function CreateOrderPage() {
 
                         {designType === 'catalogue' ? (
                             <div>
-                                {/* Catalogue Grid */}
-                                <div
-                                    style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                                        gap: '1rem',
-                                        marginBottom: '1.5rem',
-                                    }}
-                                >
-                                    {CATALOGUE_DESIGNS.map((item) => {
-                                        const isSelected = selectedDesign.id === item.id
+                                {isLoadingDesigns ? (
+                                    <div style={{ padding: '2.5rem', textAlign: 'center', color: '#8A7A6E', fontSize: '0.875rem' }}>
+                                        Loading catalogue designs from database...
+                                    </div>
+                                ) : catalogueDesigns.length === 0 ? (
+                                    <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#FAF7F2', borderRadius: '12px', border: '1px solid #EDE8E1' }}>
+                                        <p style={{ margin: 0, fontWeight: 700, color: '#1C0F07' }}>No catalogue designs found in database</p>
+                                        <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: '#8A7A6E' }}>
+                                            Please add designs in the Admin Catalogue or switch to <strong>Custom Reference Design</strong>.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Catalogue Grid */}
+                                        <div
+                                            style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                                                gap: '1rem',
+                                                marginBottom: '1.5rem',
+                                            }}
+                                        >
+                                            {catalogueDesigns.map((item) => {
+                                                const isSelected = selectedDesign?.id === item.id
 
-                                        return (
+                                                return (
+                                                    <div
+                                                        key={item.id}
+                                                        onClick={() => handleSelectDesign(item)}
+                                                        style={{
+                                                            border: isSelected ? '2px solid #C4975A' : '1px solid #EDE8E1',
+                                                            backgroundColor: isSelected ? '#FFFDF9' : '#FFFFFF',
+                                                            borderRadius: '12px',
+                                                            overflow: 'hidden',
+                                                            cursor: 'pointer',
+                                                            boxShadow: isSelected ? '0 3px 8px rgba(196,151,90,0.2)' : 'none',
+                                                            transition: 'all 0.15s ease',
+                                                        }}
+                                                    >
+                                                        <div style={{ height: '140px', position: 'relative' }}>
+                                                            <Image src={item.image} alt={item.name} fill style={{ objectFit: 'cover' }} />
+                                                            {isSelected && (
+                                                                <div
+                                                                    style={{
+                                                                        position: 'absolute',
+                                                                        top: '6px',
+                                                                        right: '6px',
+                                                                        backgroundColor: '#C4975A',
+                                                                        color: '#FFFFFF',
+                                                                        width: '20px',
+                                                                        height: '20px',
+                                                                        borderRadius: '9999px',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                    }}
+                                                                >
+                                                                    ✓
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ padding: '0.75rem' }}>
+                                                            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1C0F07' }}>{item.name}</div>
+                                                            <div style={{ fontSize: '0.78rem', color: '#C4975A', fontWeight: 700, marginTop: '0.2rem' }}>
+                                                                {currency === 'EUR' ? `€${item.priceEUR}` : `₦${item.priceNGN.toLocaleString()}`}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+
+                                        {/* Customizations for chosen design */}
+                                        {selectedDesign && (
                                             <div
-                                                key={item.id}
-                                                onClick={() => handleSelectDesign(item)}
                                                 style={{
-                                                    border: isSelected ? '2px solid #C4975A' : '1px solid #EDE8E1',
-                                                    backgroundColor: isSelected ? '#FFFDF9' : '#FFFFFF',
+                                                    backgroundColor: '#FAF7F2',
+                                                    padding: '1.25rem',
                                                     borderRadius: '12px',
-                                                    overflow: 'hidden',
-                                                    cursor: 'pointer',
-                                                    boxShadow: isSelected ? '0 3px 8px rgba(196,151,90,0.2)' : 'none',
-                                                    transition: 'all 0.15s ease',
+                                                    border: '1px solid #EAE3D9',
+                                                    display: 'grid',
+                                                    gridTemplateColumns: 'repeat(2, 1fr)',
+                                                    gap: '1rem',
                                                 }}
                                             >
-                                                <div style={{ height: '140px', position: 'relative' }}>
-                                                    <Image src={item.image} alt={item.name} fill style={{ objectFit: 'cover' }} />
-                                                    {isSelected && (
-                                                        <div
-                                                            style={{
-                                                                position: 'absolute',
-                                                                top: '6px',
-                                                                right: '6px',
-                                                                backgroundColor: '#C4975A',
-                                                                color: '#FFFFFF',
-                                                                width: '20px',
-                                                                height: '20px',
-                                                                borderRadius: '9999px',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                            }}
-                                                        >
-                                                            ✓
-                                                        </div>
-                                                    )}
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
+                                                        Fabric Selection
+                                                    </label>
+                                                    <select
+                                                        value={fabricChoice}
+                                                        onChange={(e) => setFabricChoice(e.target.value)}
+                                                        style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
+                                                    >
+                                                        {(selectedDesign.defaultFabrics || []).map((f) => (
+                                                            <option key={f} value={f}>{f}</option>
+                                                        ))}
+                                                        <option value="Client Supplied Fabric">Client Supplied Fabric</option>
+                                                    </select>
                                                 </div>
-                                                <div style={{ padding: '0.75rem' }}>
-                                                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1C0F07' }}>{item.name}</div>
-                                                    <div style={{ fontSize: '0.78rem', color: '#C4975A', fontWeight: 700, marginTop: '0.2rem' }}>
-                                                        {currency === 'EUR' ? `€${item.priceEUR}` : `₦${item.priceNGN.toLocaleString()}`}
-                                                    </div>
+                                                <div style={{ gridColumn: 'span 2' }}>
+                                                    <ColourSelector
+                                                        label="Colour Palette Selection"
+                                                        options={selectedDesign.defaultColours}
+                                                        value={colourChoice}
+                                                        onChange={(val) => setColourChoice(val)}
+                                                        darkMode={false}
+                                                    />
+                                                </div>
+                                                <div style={{ gridColumn: 'span 2' }}>
+                                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
+                                                        Special Tailoring Instructions
+                                                    </label>
+                                                    <textarea
+                                                        value={specialInstructions}
+                                                        onChange={(e) => setSpecialInstructions(e.target.value)}
+                                                        placeholder="e.g. Extra 2 inches on sleeve cuff, matching cap, hidden zip pocket..."
+                                                        rows={2}
+                                                        style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
+                                                    />
                                                 </div>
                                             </div>
-                                        )
-                                    })}
-                                </div>
-
-                                {/* Customizations for chosen design */}
-                                <div
-                                    style={{
-                                        backgroundColor: '#FAF7F2',
-                                        padding: '1.25rem',
-                                        borderRadius: '12px',
-                                        border: '1px solid #EAE3D9',
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(2, 1fr)',
-                                        gap: '1rem',
-                                    }}
-                                >
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
-                                            Fabric Selection
-                                        </label>
-                                        <select
-                                            value={fabricChoice}
-                                            onChange={(e) => setFabricChoice(e.target.value)}
-                                            style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
-                                        >
-                                            {selectedDesign.defaultFabrics.map((f) => (
-                                                <option key={f} value={f}>{f}</option>
-                                            ))}
-                                            <option value="Client Supplied Fabric">Client Supplied Fabric</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
-                                            Colour Palette
-                                        </label>
-                                        <select
-                                            value={colourChoice}
-                                            onChange={(e) => setColourChoice(e.target.value)}
-                                            style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
-                                        >
-                                            {selectedDesign.defaultColours.map((c) => (
-                                                <option key={c} value={c}>{c}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div style={{ gridColumn: 'span 2' }}>
-                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
-                                            Special Tailoring Instructions
-                                        </label>
-                                        <textarea
-                                            value={specialInstructions}
-                                            onChange={(e) => setSpecialInstructions(e.target.value)}
-                                            placeholder="e.g. Extra 2 inches on sleeve cuff, matching cap, hidden zip pocket..."
-                                            rows={2}
-                                            style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
-                                        />
-                                    </div>
-                                </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         ) : (
                             /* Custom Design Upload */
@@ -862,7 +1182,7 @@ export default function CreateOrderPage() {
                                         style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
                                     />
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.25rem' }}>Fabric</label>
                                         <input
@@ -873,35 +1193,323 @@ export default function CreateOrderPage() {
                                             style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
                                         />
                                     </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.25rem' }}>Colour Choice</label>
-                                        <input
-                                            type="text"
-                                            placeholder="e.g. Royal Navy & Champagne"
+                                    <div style={{ gridColumn: 'span 2' }}>
+                                        <ColourSelector
+                                            label="Garment Colour & Custom Shade"
+                                            options={ATELIER_PALETTE}
                                             value={customDesign.colour}
-                                            onChange={(e) => setCustomDesign({ ...customDesign, colour: e.target.value })}
-                                            style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
+                                            onChange={(val) => setCustomDesign({ ...customDesign, colour: val })}
+                                            darkMode={false}
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.25rem' }}>Upload Reference Sketch / Photo</label>
-                                    <div
-                                        style={{
-                                            border: '2px dashed #D5CCA8',
-                                            borderRadius: '10px',
-                                            padding: '1.5rem',
-                                            textAlign: 'center',
-                                            cursor: 'pointer',
-                                            backgroundColor: '#FFFFFF',
+                                    {/* Always render hidden input so file picker can be triggered */}
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        style={{ display: 'none' }}
+                                        onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                                handleCustomImageFile(e.target.files[0])
+                                            }
                                         }}
-                                    >
-                                        <IconUploadCloud />
-                                        <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#1C0F07', marginTop: '0.35rem' }}>
-                                            Click or drop customer&apos;s WhatsApp image reference
-                                        </div>
-                                        <div style={{ fontSize: '0.75rem', color: '#8A7A6E' }}>Supports JPG, PNG up to 20MB</div>
+                                    />
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F' }}>
+                                            Reference Sketch / Photo
+                                        </label>
+                                        {customDesign.image && (
+                                            <span style={{ fontSize: '0.7rem', color: '#059669', fontWeight: 600, backgroundColor: '#ECFDF5', padding: '0.15rem 0.5rem', borderRadius: '4px', border: '1px solid #A7F3D0' }}>
+                                                ✓ Reference Attached
+                                            </span>
+                                        )}
                                     </div>
+
+                                    {customDesign.image ? (
+                                        /* Active Image Preview Card */
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                flexWrap: 'wrap',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                gap: '1rem',
+                                                backgroundColor: '#FFFFFF',
+                                                padding: '0.85rem 1rem',
+                                                borderRadius: '10px',
+                                                border: '1px solid #D5CCA8',
+                                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', minWidth: '220px', flex: '1 1 auto' }}>
+                                                <div
+                                                    style={{
+                                                        width: '68px',
+                                                        height: '68px',
+                                                        minWidth: '68px',
+                                                        borderRadius: '8px',
+                                                        overflow: 'hidden',
+                                                        border: '1px solid #E0D7CB',
+                                                        backgroundColor: '#F5EFEB',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        flexShrink: 0,
+                                                    }}
+                                                >
+                                                    <img
+                                                        src={customDesign.image}
+                                                        alt="Custom design preview"
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                        onError={() => {
+                                                            setCustomImageError('Failed to load image from this URL. Please verify the link or upload a file.')
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div style={{ overflow: 'hidden' }}>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1C0F07', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                                        {customImageName || 'Customer WhatsApp Reference'}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.725rem', color: '#8A7A6E', marginTop: '0.2rem' }}>
+                                                        {customDesign.image.startsWith('data:') ? 'Uploaded device file • Attached to order' : 'Web URL reference • Attached to order'}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (customImageMode === 'upload') {
+                                                            fileInputRef.current?.click()
+                                                        } else {
+                                                            setCustomDesign((prev) => ({ ...prev, image: '' }))
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        padding: '0.45rem 0.75rem',
+                                                        borderRadius: '6px',
+                                                        border: '1px solid #D5CCA8',
+                                                        backgroundColor: '#FAF7F2',
+                                                        color: '#1C0F07',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.35rem',
+                                                    }}
+                                                >
+                                                    <IconPhoto />
+                                                    Change
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleRemoveCustomImage}
+                                                    style={{
+                                                        padding: '0.45rem 0.75rem',
+                                                        borderRadius: '6px',
+                                                        border: '1px solid #FECACA',
+                                                        backgroundColor: '#FEF2F2',
+                                                        color: '#DC2626',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.35rem',
+                                                    }}
+                                                >
+                                                    <IconTrash />
+                                                    Remove
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* Dual Mode Upload / Paste Area */
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                            {/* Mode Switcher Tabs */}
+                                            <div style={{ display: 'flex', gap: '0.35rem', backgroundColor: '#EDE8E1', padding: '0.25rem', borderRadius: '8px', width: 'fit-content' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setCustomImageMode('upload'); setCustomImageError(null) }}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.35rem',
+                                                        padding: '0.35rem 0.75rem',
+                                                        borderRadius: '6px',
+                                                        border: 'none',
+                                                        backgroundColor: customImageMode === 'upload' ? '#C4975A' : 'transparent',
+                                                        color: customImageMode === 'upload' ? '#FFFFFF' : '#6E5D4F',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.15s ease',
+                                                    }}
+                                                >
+                                                    <IconUploadCloud />
+                                                    Upload / Drop File
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setCustomImageMode('url'); setCustomImageError(null) }}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.35rem',
+                                                        padding: '0.35rem 0.75rem',
+                                                        borderRadius: '6px',
+                                                        border: 'none',
+                                                        backgroundColor: customImageMode === 'url' ? '#C4975A' : 'transparent',
+                                                        color: customImageMode === 'url' ? '#FFFFFF' : '#6E5D4F',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.15s ease',
+                                                    }}
+                                                >
+                                                    <IconLink />
+                                                    Paste Image URL
+                                                </button>
+                                            </div>
+
+                                            {customImageMode === 'upload' ? (
+                                                /* Dropzone */
+                                                <div
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    onDragOver={handleDragOver}
+                                                    onDragLeave={handleDragLeave}
+                                                    onDrop={handleDrop}
+                                                    onPaste={handlePasteEvent}
+                                                    tabIndex={0}
+                                                    role="button"
+                                                    aria-label="Upload reference sketch or photo"
+                                                    style={{
+                                                        border: isDraggingFile ? '2px dashed #C4975A' : '2px dashed #D5CCA8',
+                                                        borderRadius: '10px',
+                                                        padding: '1.75rem 1rem',
+                                                        textAlign: 'center',
+                                                        cursor: 'pointer',
+                                                        backgroundColor: isDraggingFile ? '#FDF8F3' : '#FFFFFF',
+                                                        transition: 'border-color 0.2s, background-color 0.2s',
+                                                        outline: 'none',
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.4rem' }}>
+                                                        <IconUploadCloud />
+                                                    </div>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1C0F07' }}>
+                                                        Click or drop customer&apos;s WhatsApp image reference
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#8A7A6E', marginTop: '0.2rem' }}>
+                                                        Supports JPG, PNG, WebP up to 20MB • Or paste directly with Ctrl+V / ⌘+V
+                                                    </div>
+                                                    <div style={{ marginTop: '0.75rem' }}>
+                                                        <span
+                                                            style={{
+                                                                display: 'inline-block',
+                                                                padding: '0.35rem 0.85rem',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: '#FAF7F2',
+                                                                border: '1px solid #D5CCA8',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 600,
+                                                                color: '#6E5D4F',
+                                                            }}
+                                                        >
+                                                            Browse Device Photos
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                /* URL Paste Box */
+                                                <div
+                                                    onPaste={handlePasteEvent}
+                                                    style={{
+                                                        backgroundColor: '#FFFFFF',
+                                                        border: '1px solid #E0D7CB',
+                                                        borderRadius: '10px',
+                                                        padding: '1.25rem',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '0.75rem',
+                                                    }}
+                                                >
+                                                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1C0F07' }}>
+                                                        Paste Image URL from WhatsApp Web, Cloudinary, or web link:
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                        <input
+                                                            type="url"
+                                                            placeholder="https://example.com/custom-suit-sketch.jpg"
+                                                            value={customImageUrlInput}
+                                                            onChange={(e) => {
+                                                                setCustomImageUrlInput(e.target.value)
+                                                                if (customImageError) setCustomImageError(null)
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.preventDefault()
+                                                                    handleApplyCustomImageUrl()
+                                                                }
+                                                            }}
+                                                            style={{
+                                                                flex: '1 1 240px',
+                                                                padding: '0.55rem 0.75rem',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #E0D7CB',
+                                                                fontSize: '0.85rem',
+                                                                outline: 'none',
+                                                            }}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleApplyCustomImageUrl()}
+                                                            style={{
+                                                                padding: '0.55rem 1.25rem',
+                                                                borderRadius: '8px',
+                                                                border: 'none',
+                                                                backgroundColor: '#C4975A',
+                                                                color: '#FFFFFF',
+                                                                fontSize: '0.825rem',
+                                                                fontWeight: 700,
+                                                                cursor: 'pointer',
+                                                                flexShrink: 0,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '0.35rem',
+                                                            }}
+                                                        >
+                                                            <IconLink />
+                                                            Attach URL
+                                                        </button>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.725rem', color: '#8A7A6E' }}>
+                                                        Tip: Right-click any image in WhatsApp Web or Google &rarr; &quot;Copy image address&quot; &rarr; Paste here.
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {customImageError && (
+                                                <div
+                                                    style={{
+                                                        fontSize: '0.75rem',
+                                                        color: '#DC2626',
+                                                        backgroundColor: '#FEF2F2',
+                                                        padding: '0.5rem 0.75rem',
+                                                        borderRadius: '6px',
+                                                        border: '1px solid #FECACA',
+                                                    }}
+                                                >
+                                                    {customImageError}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -910,54 +1518,140 @@ export default function CreateOrderPage() {
 
                 {/* ── STEP 3: MEASUREMENTS ────────────────────────────────────────────── */}
                 {currentStep === 3 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                             <div>
                                 <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1C0F07', margin: 0 }}>
                                     Step 3: Measurements
                                 </h2>
                                 <p style={{ fontSize: '0.825rem', color: '#8A7A6E', margin: 0, marginTop: '0.25rem' }}>
                                     {selectedCustomer
-                                        ? `Auto-filled from ${selectedCustomer.name}'s profile. Modify if recent changes occurred.`
+                                        ? `Loaded directly from ${selectedCustomer.name}'s database profile.`
                                         : 'Input client measurements taken via WhatsApp or in person.'}
                                 </p>
                             </div>
-                            {/* Unit toggle */}
-                            <div style={{ display: 'flex', gap: '0.25rem', backgroundColor: '#FAF7F2', padding: '0.25rem', borderRadius: '8px', border: '1px solid #E5DFD7' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setMeasurements({ ...measurements, unit: 'inches' })}
-                                    style={{
-                                        padding: '0.35rem 0.65rem',
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        backgroundColor: measurements.unit === 'inches' ? '#C4975A' : 'transparent',
-                                        color: measurements.unit === 'inches' ? '#FFFFFF' : '#6E5D4F',
-                                        fontWeight: 700,
-                                        fontSize: '0.75rem',
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    Inches
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setMeasurements({ ...measurements, unit: 'cm' })}
-                                    style={{
-                                        padding: '0.35rem 0.65rem',
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        backgroundColor: measurements.unit === 'cm' ? '#C4975A' : 'transparent',
-                                        color: measurements.unit === 'cm' ? '#FFFFFF' : '#6E5D4F',
-                                        fontWeight: 700,
-                                        fontSize: '0.75rem',
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    CM
-                                </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                {selectedCustomer && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSaveMeasurementsToDb(measurements)}
+                                        disabled={isSavingMeasurements}
+                                        style={{
+                                            padding: '0.4rem 0.85rem',
+                                            borderRadius: '8px',
+                                            border: '1px solid #D5CCA8',
+                                            backgroundColor: '#FFFFFF',
+                                            color: '#1C0F07',
+                                            fontSize: '0.78rem',
+                                            fontWeight: 700,
+                                            cursor: isSavingMeasurements ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                        }}
+                                    >
+                                        <IconCheck />
+                                        <span>{isSavingMeasurements ? 'Saving to Database...' : 'Save to DB Profile'}</span>
+                                    </button>
+                                )}
+                                {/* Unit toggle */}
+                                <div style={{ display: 'flex', gap: '0.25rem', backgroundColor: '#FAF7F2', padding: '0.25rem', borderRadius: '8px', border: '1px solid #E5DFD7' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setMeasurements({ ...measurements, unit: 'inches' })}
+                                        style={{
+                                            padding: '0.35rem 0.65rem',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            backgroundColor: measurements.unit === 'inches' ? '#C4975A' : 'transparent',
+                                            color: measurements.unit === 'inches' ? '#FFFFFF' : '#6E5D4F',
+                                            fontWeight: 700,
+                                            fontSize: '0.75rem',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        Inches
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setMeasurements({ ...measurements, unit: 'cm' })}
+                                        style={{
+                                            padding: '0.35rem 0.65rem',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            backgroundColor: measurements.unit === 'cm' ? '#C4975A' : 'transparent',
+                                            color: measurements.unit === 'cm' ? '#FFFFFF' : '#6E5D4F',
+                                            fontWeight: 700,
+                                            fontSize: '0.75rem',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        CM
+                                    </button>
+                                </div>
                             </div>
                         </div>
+
+                        {/* Customer Database Measurement Notice */}
+                        {selectedCustomer && (
+                            <div
+                                style={{
+                                    backgroundColor: '#FDFBF7',
+                                    border: '1px solid #D5CCA8',
+                                    borderRadius: '12px',
+                                    padding: '1rem 1.25rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.5rem',
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <span
+                                            style={{
+                                                backgroundColor: '#ECFDF5',
+                                                color: '#065F46',
+                                                border: '1px solid #A7F3D0',
+                                                padding: '0.2rem 0.55rem',
+                                                borderRadius: '6px',
+                                                fontSize: '0.725rem',
+                                                fontWeight: 700,
+                                            }}
+                                        >
+                                            ✓ Database Verified
+                                        </span>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1C0F07' }}>
+                                            Latest Measurements for {selectedCustomer.name}
+                                        </span>
+                                    </div>
+                                    {selectedCustomer.measurementDate && (
+                                        <span style={{ fontSize: '0.75rem', color: '#8A7A6E', fontWeight: 600 }}>
+                                            Profile Updated: {new Date(selectedCustomer.measurementDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </span>
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#6E5D4F' }}>
+                                        These measurements belong to {selectedCustomer.name} and were fetched from the database. Any edits made will be saved to their customer profile in the database.
+                                    </p>
+                                    {measurementSaveStatus && (
+                                        <span
+                                            style={{
+                                                fontSize: '0.75rem',
+                                                fontWeight: 700,
+                                                color: measurementSaveStatus.includes('Error') || measurementSaveStatus.includes('Failed') ? '#DC2626' : '#166534',
+                                                backgroundColor: measurementSaveStatus.includes('Error') || measurementSaveStatus.includes('Failed') ? '#FEF2F2' : '#DCFCE7',
+                                                padding: '0.2rem 0.6rem',
+                                                borderRadius: '6px',
+                                            }}
+                                        >
+                                            {measurementSaveStatus}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         {/* 8 Inputs Grid */}
                         <div
@@ -1026,7 +1720,7 @@ export default function CreateOrderPage() {
                                     onChange={(e) => setSaveToProfile(e.target.checked)}
                                     style={{ width: '16px', height: '16px', accentColor: '#C4975A' }}
                                 />
-                                <span>Save these updated measurements back to {selectedCustomer.name}&apos;s customer profile</span>
+                                <span>Save these updated measurements back to {selectedCustomer.name}&apos;s customer profile in the database</span>
                             </label>
                         )}
                     </div>
@@ -1092,7 +1786,7 @@ export default function CreateOrderPage() {
 
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
-                                    Estimated Atelier Completion Date
+                                    Estimated Completion Date
                                 </label>
                                 <input
                                     type="date"
@@ -1117,19 +1811,15 @@ export default function CreateOrderPage() {
 
                             <div style={{ gridColumn: 'span 2' }}>
                                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
-                                    Assigned Atelier Artisan
+                                    Assigned Tailor / Artisan
                                 </label>
-                                <select
+                                <input
+                                    type="text"
                                     value={assignedTailor}
                                     onChange={(e) => setAssignedTailor(e.target.value)}
+                                    placeholder="Enter tailor or artisan name (e.g. Babatunde Bello, Kolapo Adeleke)"
                                     style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
-                                >
-                                    {TAILORS_ROSTER.map((t) => (
-                                        <option key={t.id} value={t.name}>
-                                            {t.name} — {t.role} ({t.location})
-                                        </option>
-                                    ))}
-                                </select>
+                                />
                             </div>
                         </div>
                     </div>
@@ -1185,7 +1875,7 @@ export default function CreateOrderPage() {
                                     type="number"
                                     value={depositAmount}
                                     onChange={(e) => setDepositAmount(parseFloat(e.target.value) || 0)}
-                                    style={{ width: '100%', padding: '0.65rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '1.1rem', fontWeight: 800, color: '#C4975A' }}
+                                    style={{ width: '100%', padding: '0.65rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '1.1rem', fontWeight: 800, color: '#2B2B2B' }}
                                 />
                                 <span style={{ fontSize: '0.725rem', color: '#8A7A6E', marginTop: '0.2rem', display: 'block' }}>
                                     Balance due before dispatch: {currency === 'EUR' ? `€${totalAmount - depositAmount}` : `₦${(totalAmount - depositAmount).toLocaleString()}`}
@@ -1201,7 +1891,7 @@ export default function CreateOrderPage() {
                                         { id: 'Stripe', label: 'Stripe Link (EUR / Intl)' },
                                         { id: 'Paystack', label: 'Paystack Link (NGN / Card)' },
                                         { id: 'Manual Bank Transfer', label: 'Direct Bank Wire' },
-                                        { id: 'Cash', label: 'Atelier Cash / POS' },
+                                        { id: 'Cash', label: 'Direct Cash / POS' },
                                     ].map((m) => (
                                         <button
                                             key={m.id}
@@ -1282,14 +1972,27 @@ export default function CreateOrderPage() {
                             {/* Garment Summary */}
                             <div style={{ backgroundColor: '#FFFFFF', padding: '1rem', borderRadius: '10px', border: '1px solid #EDE8E1' }}>
                                 <div style={{ fontSize: '0.725rem', fontWeight: 700, color: '#C4975A', textTransform: 'uppercase' }}>Design & Specs</div>
-                                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#1C0F07', marginTop: '0.2rem' }}>
-                                    {designType === 'catalogue' ? selectedDesign.name : customDesign.name}
-                                </div>
-                                <div style={{ fontSize: '0.8rem', color: '#6E5D4F', marginTop: '0.2rem' }}>
-                                    Fabric: {designType === 'catalogue' ? fabricChoice : customDesign.fabric}
-                                </div>
-                                <div style={{ fontSize: '0.75rem', color: '#8A7A6E', marginTop: '0.2rem' }}>
-                                    Colour: {designType === 'catalogue' ? colourChoice : customDesign.colour}
+                                <div style={{ display: 'flex', gap: '0.85rem', marginTop: '0.5rem', alignItems: 'center' }}>
+                                    {((designType === 'catalogue' && selectedDesign?.image) || (designType === 'custom' && customDesign.image)) && (
+                                        <div style={{ width: '56px', height: '56px', minWidth: '56px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E0D7CB', backgroundColor: '#F5EFEB', flexShrink: 0 }}>
+                                            <img
+                                                src={designType === 'catalogue' ? selectedDesign?.image : customDesign.image}
+                                                alt="Garment preview"
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                        </div>
+                                    )}
+                                    <div>
+                                        <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1C0F07' }}>
+                                            {designType === 'catalogue' ? (selectedDesign?.name || 'Selected Design') : (customDesign.name || 'Custom Bespoke Creation')}
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: '#6E5D4F', marginTop: '0.15rem' }}>
+                                            Fabric: {designType === 'catalogue' ? fabricChoice : (customDesign.fabric || 'Consultation')}
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#8A7A6E', marginTop: '0.15rem' }}>
+                                            Colour: {designType === 'catalogue' ? colourChoice : (customDesign.colour || 'Consultation')}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1303,7 +2006,7 @@ export default function CreateOrderPage() {
                                     Hard Deadline: {deadline}
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: '#8A7A6E', marginTop: '0.2rem' }}>
-                                    Assigned: {assignedTailor}
+                                    Assigned: {assignedTailor || 'Unassigned'}
                                 </div>
                             </div>
 
@@ -1376,7 +2079,12 @@ export default function CreateOrderPage() {
                     {currentStep < 6 ? (
                         <button
                             type="button"
-                            onClick={() => setCurrentStep(currentStep + 1)}
+                            onClick={async () => {
+                                if (currentStep === 3 && selectedCustomer && saveToProfile) {
+                                    await handleSaveMeasurementsToDb(measurements)
+                                }
+                                setCurrentStep(currentStep + 1)
+                            }}
                             style={{
                                 padding: '0.625rem 1.5rem',
                                 borderRadius: '8px',

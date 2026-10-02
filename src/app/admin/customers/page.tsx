@@ -5,8 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
     AdminCustomer,
-    getAllCustomers,
 } from '@/data/adminCustomersData'
+import { getAllAdminCustomersAction } from '@/lib/actions/customers'
 import { Location } from '@/data/adminOrdersData'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
@@ -37,6 +37,7 @@ const IconUserCheck = () => (
 export default function AdminCustomersPage() {
     const router = useRouter()
     const [customers, setCustomers] = useState<AdminCustomer[]>([])
+    const [isLoading, setIsLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
     const [locationFilter, setLocationFilter] = useState<'All' | Location>('All')
     const [orderCountFilter, setOrderCountFilter] = useState<'All' | 'ordered' | 'never'>('All')
@@ -44,9 +45,20 @@ export default function AdminCustomersPage() {
     const [subscriptionFilter, setSubscriptionFilter] = useState<'All' | 'subscribed' | 'unsubscribed'>('All')
     const [sortBy, setSortBy] = useState<'recent_order' | 'total_orders' | 'date_joined' | 'referral_count'>('recent_order')
 
-    // Load customers
+    // Load customers strictly from database
     useEffect(() => {
-        setCustomers(getAllCustomers())
+        let isMounted = true
+        setIsLoading(true)
+        getAllAdminCustomersAction().then((res) => {
+            if (!isMounted) return
+            if (res.success && res.customers) {
+                setCustomers(res.customers)
+            }
+            setIsLoading(false)
+        })
+        return () => {
+            isMounted = false
+        }
     }, [])
 
     // Filter & Sort
@@ -466,7 +478,11 @@ export default function AdminCustomersPage() {
                     overflowX: 'auto',
                 }}
             >
-                {filteredCustomers.length > 0 ? (
+                {isLoading ? (
+                    <div style={{ padding: '3.5rem 2rem', textAlign: 'center', color: '#8A7A6E', fontSize: '0.9rem' }}>
+                        Loading verified patrons from database...
+                    </div>
+                ) : filteredCustomers.length > 0 ? (
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                         <thead>
                             <tr style={{ backgroundColor: '#FAF7F2', borderBottom: '1px solid #EAE3D9' }}>

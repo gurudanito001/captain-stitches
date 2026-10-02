@@ -989,6 +989,7 @@ export default function AdminProfilePage() {
                                             border: '1px solid #EDE8E1',
                                             backgroundColor: '#FAF7F2',
                                             fontSize: '13px',
+                                            color: '#2B2B2B',
                                             outline: 'none',
                                         }}
                                     />

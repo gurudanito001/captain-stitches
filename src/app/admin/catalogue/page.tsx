@@ -8,12 +8,16 @@ import {
     CatalogueDesign,
     CatalogueCategory,
     CATEGORY_OPTIONS,
-    getAllDesigns,
-    saveAllDesigns,
-    saveDesign,
-    deleteDesign,
-    duplicateDesign,
 } from '@/data/adminCatalogueData'
+import {
+    createDesignAction,
+    getAllDesignsAdminAction,
+    toggleDesignVisibilityAction,
+    toggleDesignFeaturedAction,
+    deleteDesignAction,
+    reorderDesignsAction,
+} from '@/lib/actions/catalogue'
+import { serializeColour } from '@/lib/utils/colours'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
 const IconSearch = () => (
@@ -59,9 +63,20 @@ export default function AdminCataloguePage() {
     const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
     const [toastMessage, setToastMessage] = useState<string | null>(null)
 
-    // Load designs
+    const [isLoading, setIsLoading] = useState(true)
+
+    // Load designs from database
+    const loadDesigns = async () => {
+        setIsLoading(true)
+        const res = await getAllDesignsAdminAction()
+        if (res.success && res.designs) {
+            setDesigns(res.designs)
+        }
+        setIsLoading(false)
+    }
+
     useEffect(() => {
-        setDesigns(getAllDesigns())
+        loadDesigns()
     }, [])
 
     const showToast = (msg: string) => {
@@ -109,44 +124,87 @@ export default function AdminCataloguePage() {
     }, [designs, searchQuery, categoryFilter, visibilityFilter, featuredFilter, sortBy])
 
     // Toggle visibility on card
-    const handleToggleVisibility = (e: React.MouseEvent, designId: string) => {
+    const handleToggleVisibility = async (e: React.MouseEvent, designId: string) => {
         e.stopPropagation()
-        const updated = designs.map((d) => (d.id === designId ? { ...d, isVisible: !d.isVisible } : d))
-        setDesigns(updated)
-        saveAllDesigns(updated)
-        const target = updated.find((d) => d.id === designId)
-        showToast(`${target?.contentEN.name} is now ${target?.isVisible ? 'Visible on site' : 'Hidden from site'}`)
+        const target = designs.find((d) => d.id === designId)
+        if (!target) return
+        const nextState = !target.isVisible
+
+        // Optimistic update
+        setDesigns((prev) => prev.map((d) => (d.id === designId ? { ...d, isVisible: nextState } : d)))
+        const res = await toggleDesignVisibilityAction(designId, nextState)
+        if (res.success) {
+            showToast(`${target.contentEN.name} is now ${nextState ? 'Visible on site' : 'Hidden from site'}`)
+        } else {
+            // Revert on error
+            setDesigns((prev) => prev.map((d) => (d.id === designId ? { ...d, isVisible: !nextState } : d)))
+            showToast(`Failed to update visibility: ${res.error}`)
+        }
     }
 
     // Toggle featured on card
-    const handleToggleFeatured = (e: React.MouseEvent, designId: string) => {
+    const handleToggleFeatured = async (e: React.MouseEvent, designId: string) => {
         e.stopPropagation()
-        const updated = designs.map((d) => (d.id === designId ? { ...d, isFeatured: !d.isFeatured } : d))
-        setDesigns(updated)
-        saveAllDesigns(updated)
-        const target = updated.find((d) => d.id === designId)
-        showToast(`${target?.contentEN.name} ${target?.isFeatured ? 'marked as Featured' : 'removed from Featured'}`)
+        const target = designs.find((d) => d.id === designId)
+        if (!target) return
+        const nextState = !target.isFeatured
+
+        // Optimistic update
+        setDesigns((prev) => prev.map((d) => (d.id === designId ? { ...d, isFeatured: nextState } : d)))
+        const res = await toggleDesignFeaturedAction(designId, nextState)
+        if (res.success) {
+            showToast(`${target.contentEN.name} ${nextState ? 'marked as Featured' : 'removed from Featured'}`)
+        } else {
+            // Revert on error
+            setDesigns((prev) => prev.map((d) => (d.id === designId ? { ...d, isFeatured: !nextState } : d)))
+            showToast(`Failed to update featured: ${res.error}`)
+        }
     }
 
-    // Duplicate design
-    const handleDuplicate = (e: React.MouseEvent, designId: string) => {
+    // Duplicate design in database
+    const handleDuplicate = async (e: React.MouseEvent, designId: string) => {
         e.stopPropagation()
         setActiveMenuId(null)
-        const copy = duplicateDesign(designId)
-        if (copy) {
-            setDesigns(getAllDesigns())
-            showToast(`Duplicated as draft: ${copy.contentEN.name}`)
+        const target = designs.find((d) => d.id === designId)
+        if (!target) return
+        const res = await createDesignAction({
+            nameEN: `${target.contentEN.name} (Copy)`,
+            descriptionEN: target.contentEN.description,
+            fabricOptionsEN: target.fabrics,
+            colourOptionsEN: target.colours.map((c) => serializeColour(c)),
+            category: target.category,
+            turnaroundDays: target.turnaroundDays,
+            priceNGN: target.pricing.priceNGN,
+            priceEUR: target.pricing.priceEUR,
+            isVisible: false,
+            photos: target.photos.map((p, idx) => ({
+                url: p.url,
+                altText: p.caption || target.contentEN.name,
+                sortOrder: idx,
+                isPrimary: idx === 0,
+            })),
+        })
+        if (res.success) {
+            await loadDesigns()
+            showToast(`Duplicated as draft: ${target.contentEN.name} (Copy)`)
+        } else {
+            showToast(`Failed to duplicate: ${res.error}`)
         }
     }
 
     // Delete design
-    const handleDelete = (e: React.MouseEvent, designId: string, designName: string) => {
+    const handleDelete = async (e: React.MouseEvent, designId: string, designName: string) => {
         e.stopPropagation()
         setActiveMenuId(null)
-        if (confirm(`Are you sure you want to delete "${designName}" from the catalogue?`)) {
-            deleteDesign(designId)
-            setDesigns(getAllDesigns())
-            showToast(`Deleted ${designName}`)
+        if (confirm(`Are you sure you want to delete "${designName}" from the catalogue database?`)) {
+            setDesigns((prev) => prev.filter((d) => d.id !== designId))
+            const res = await deleteDesignAction(designId)
+            if (res.success) {
+                showToast(`Deleted ${designName} from database`)
+            } else {
+                loadDesigns()
+                showToast(`Failed to delete: ${res.error}`)
+            }
         }
     }
 
@@ -183,10 +241,15 @@ export default function AdminCataloguePage() {
         setHasUnsavedOrder(true)
     }
 
-    const handleSaveOrder = () => {
-        saveAllDesigns(designs)
-        setHasUnsavedOrder(false)
-        showToast('Catalogue layout order saved to live storefront!')
+    const handleSaveOrder = async () => {
+        const orderedIds = designs.map((d) => d.id)
+        const res = await reorderDesignsAction(orderedIds)
+        if (res.success) {
+            setHasUnsavedOrder(false)
+            showToast('Catalogue layout order saved to database!')
+        } else {
+            showToast(`Failed to save order: ${res.error}`)
+        }
     }
 
     const resetFilters = () => {
@@ -600,6 +663,7 @@ export default function AdminCataloguePage() {
                                         alt={design.contentEN.name}
                                         fill
                                         style={{ objectFit: 'cover' }}
+                                        unoptimized={coverPhoto.startsWith('http')}
                                     />
 
                                     {/* Drag Handle Overlay */}
@@ -781,6 +845,49 @@ export default function AdminCataloguePage() {
                                             <span style={{ color: '#A8998C', fontWeight: 400 }}>({design.stats.reviewCount})</span>
                                         </div>
                                     </div>
+
+                                    {/* Colours Available with Hex Codes */}
+                                    {design.colours && design.colours.length > 0 && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', paddingTop: '0.2rem' }}>
+                                            {design.colours.slice(0, 3).map((col) => (
+                                                <span
+                                                    key={col.name}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.25rem',
+                                                        backgroundColor: '#FAF7F2',
+                                                        border: '1px solid #EAE3D9',
+                                                        borderRadius: '6px',
+                                                        padding: '0.15rem 0.4rem',
+                                                        fontSize: '0.7rem',
+                                                        color: '#3A2B20',
+                                                        fontWeight: 600,
+                                                    }}
+                                                    title={`${col.name} (${col.hex})`}
+                                                >
+                                                    <span
+                                                        style={{
+                                                            width: '8px',
+                                                            height: '8px',
+                                                            borderRadius: '9999px',
+                                                            backgroundColor: col.hex || '#1C1C1C',
+                                                            border: '1px solid rgba(0,0,0,0.15)',
+                                                        }}
+                                                    />
+                                                    <span>{col.name}</span>
+                                                    <span style={{ fontSize: '0.62rem', fontFamily: 'monospace', color: '#8A7A6E' }}>
+                                                        {col.hex}
+                                                    </span>
+                                                </span>
+                                            ))}
+                                            {design.colours.length > 3 && (
+                                                <span style={{ fontSize: '0.68rem', color: '#8A7A6E', fontWeight: 600 }}>
+                                                    +{design.colours.length - 3} more
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {/* Divider */}
                                     <div style={{ height: '1px', backgroundColor: '#F3EFE9' }} />

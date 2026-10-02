@@ -6,9 +6,13 @@ import { useParams, useRouter } from 'next/navigation'
 import {
     AdminCustomer,
     CustomerMeasurementsCm,
-    getAllCustomers,
-    saveCustomer,
 } from '@/data/adminCustomersData'
+import {
+    getCustomerByIdAdminAction,
+    updateCustomerPersonalAction,
+    updateCustomerMeasurementAction,
+    addCustomerAdminNoteAction,
+} from '@/lib/actions/customers'
 import { Location, Currency } from '@/data/adminOrdersData'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
@@ -30,6 +34,9 @@ export default function EditCustomerPage() {
     const customerId = params?.id as string
 
     const [customer, setCustomer] = useState<AdminCustomer | null>(null)
+    const [isLoading, setIsLoading] = useState(true)
+    const [isSaving, setIsSaving] = useState(false)
+    const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
     // Form fields
     const [name, setName] = useState('')
@@ -59,31 +66,73 @@ export default function EditCustomerPage() {
     const [adminNoteAppend, setAdminNoteAppend] = useState('')
 
     useEffect(() => {
-        const all = getAllCustomers()
-        const found = all.find((c) => c.id === customerId || c.name.toLowerCase() === customerId.toLowerCase())
-        if (found) {
-            setCustomer(found)
-            setName(found.name)
-            setEmail(found.email)
-            setPhone(found.phone)
-            setWhatsapp(found.whatsapp)
-            setLanguage(found.language)
-            setCurrency(found.currency)
-            setLocation(found.location)
-            setAddress(found.address)
-            setMeasurements({ ...found.measurements })
+        let mounted = true
+        async function load() {
+            setIsLoading(true)
+            try {
+                const res = await getCustomerByIdAdminAction(customerId)
+                if (mounted && res.success && res.customer) {
+                    const found = res.customer
+                    setCustomer(found)
+                    setName(found.name)
+                    setEmail(found.email)
+                    setPhone(found.phone)
+                    setWhatsapp(found.whatsapp)
+                    setLanguage(found.language)
+                    setCurrency(found.currency)
+                    setLocation(found.location)
+                    setAddress(found.address)
+                    setMeasurements({ ...found.measurements })
+                } else if (mounted) {
+                    setCustomer(null)
+                }
+            } catch (err) {
+                console.error('Failed to load customer:', err)
+                if (mounted) setCustomer(null)
+            } finally {
+                if (mounted) setIsLoading(false)
+            }
+        }
+        load()
+        return () => {
+            mounted = false
         }
     }, [customerId])
+
+    if (isLoading) {
+        return (
+            <div style={{ padding: '4rem 2rem', textAlign: 'center', color: '#8A7A6E' }}>
+                <div
+                    style={{
+                        display: 'inline-block',
+                        width: '36px',
+                        height: '36px',
+                        border: '3px solid #EDE8E1',
+                        borderTopColor: '#C4975A',
+                        borderRadius: '50%',
+                        animation: 'spin 0.8s linear infinite',
+                    }}
+                />
+                <p style={{ marginTop: '1rem', fontSize: '0.9rem', fontWeight: 600, color: '#1C0F07' }}>
+                    Loading patron record...
+                </p>
+                <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+            </div>
+        )
+    }
 
     if (!customer) {
         return (
             <div style={{ padding: '3rem', textAlign: 'center' }}>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1C0F07' }}>Customer not found</h2>
+                <p style={{ fontSize: '0.85rem', color: '#8A7A6E', marginTop: '0.5rem' }}>
+                    The customer record could not be loaded from the database.
+                </p>
                 <Link
                     href="/admin/customers"
                     style={{
                         display: 'inline-block',
-                        marginTop: '1rem',
+                        marginTop: '1.25rem',
                         padding: '0.5rem 1rem',
                         backgroundColor: '#C4975A',
                         color: '#FFFFFF',
@@ -97,39 +146,61 @@ export default function EditCustomerPage() {
         )
     }
 
-    const handleSave = (e: React.FormEvent) => {
+    const handleSave = async (e: React.FormEvent) => {
         e.preventDefault()
-        const now = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        setIsSaving(true)
+        setErrorMessage(null)
 
-        const updatedNotes = [...customer.adminNotes]
-        if (adminNoteAppend.trim()) {
-            updatedNotes.unshift({
-                id: `cn-${Date.now()}`,
-                author: 'Samuelson (Admin)',
-                text: adminNoteAppend.trim(),
-                timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        try {
+            // 1. Update personal details
+            const personalRes = await updateCustomerPersonalAction(customer.id, {
+                name: name.trim(),
+                email: email.trim(),
+                phone: phone.trim(),
+                whatsapp: whatsapp.trim(),
+                language,
+                currency,
+                location,
+                address: address.trim(),
             })
-        }
 
-        const updated: AdminCustomer = {
-            ...customer,
-            name: name.trim(),
-            email: email.trim(),
-            phone: phone.trim(),
-            whatsapp: whatsapp.trim(),
-            language: language,
-            currency: currency,
-            location: location,
-            address: address.trim(),
-            measurements: {
-                ...measurements,
-                lastUpdated: now,
-            },
-            adminNotes: updatedNotes,
-        }
+            if (!personalRes.success) {
+                setErrorMessage(personalRes.error || 'Failed to update personal details')
+                setIsSaving(false)
+                return
+            }
 
-        saveCustomer(updated)
-        router.push(`/admin/customers/${customer.id}`)
+            // 2. Update measurements
+            const measRes = await updateCustomerMeasurementAction(customer.id, {
+                unit: 'cm',
+                chest: measurements.chest,
+                shoulder: measurements.shoulder,
+                sleeve: measurements.sleeve,
+                waist: measurements.waist,
+                hips: measurements.hips,
+                inseam: measurements.inseam,
+                neck: measurements.neck,
+                length: measurements.length,
+                fitNotes: measurements.fitNotes,
+            })
+
+            if (!measRes.success) {
+                setErrorMessage(measRes.error || 'Failed to update measurements')
+                setIsSaving(false)
+                return
+            }
+
+            // 3. Append admin note if entered
+            if (adminNoteAppend.trim()) {
+                await addCustomerAdminNoteAction(customer.id, adminNoteAppend.trim())
+            }
+
+            router.push(`/admin/customers/${customer.id}`)
+        } catch (err: any) {
+            console.error('Error saving customer:', err)
+            setErrorMessage(err.message || 'Error saving changes to database')
+            setIsSaving(false)
+        }
     }
 
     return (
@@ -437,6 +508,12 @@ export default function EditCustomerPage() {
                     />
                 </div>
 
+                {errorMessage && (
+                    <div style={{ backgroundColor: '#FEE2E2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem' }}>
+                        {errorMessage}
+                    </div>
+                )}
+
                 {/* ─── Action Buttons ───────────────────────────────────────────────────── */}
                 <div
                     style={{
@@ -465,6 +542,7 @@ export default function EditCustomerPage() {
 
                     <button
                         type="submit"
+                        disabled={isSaving}
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -472,16 +550,16 @@ export default function EditCustomerPage() {
                             padding: '0.65rem 1.5rem',
                             borderRadius: '8px',
                             border: 'none',
-                            backgroundColor: '#C4975A',
+                            backgroundColor: isSaving ? '#E0D7CB' : '#C4975A',
                             color: '#FFFFFF',
                             fontSize: '0.875rem',
                             fontWeight: 700,
-                            cursor: 'pointer',
+                            cursor: isSaving ? 'not-allowed' : 'pointer',
                             boxShadow: '0 2px 6px rgba(196,151,90,0.3)',
                         }}
                     >
                         <IconCheck />
-                        <span>Save Changes</span>
+                        <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
                     </button>
                 </div>
             </form>

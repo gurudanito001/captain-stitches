@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { loginAdmin } from '@/data/adminProfileData'
+import { loginAdminAction } from '@/lib/actions/auth'
 import {
     FiEye,
     FiEyeOff,
@@ -19,17 +20,21 @@ function LoginFormContent() {
 
     const isSignedOut = searchParams.get('signed_out') === '1'
     const isResetSuccess = searchParams.get('reset') === '1'
+    const fromParam = searchParams.get('from')
 
     const [email, setEmail] = useState('samuelson@captainstitches.com')
     const [password, setPassword] = useState('CaptainStitches2026!')
     const [rememberMe, setRememberMe] = useState(true)
     const [showPassword, setShowPassword] = useState(false)
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
     const [flashMessage, setFlashMessage] = useState<string | null>(
         isSignedOut
             ? 'You have been signed out successfully'
             : isResetSuccess
             ? 'Your password has been reset. Please sign in with your new password.'
+            : fromParam
+            ? 'Atelier staff authentication required to access this portal page.'
             : null
     )
 
@@ -40,15 +45,15 @@ function LoginFormContent() {
 
     const passwordInputRef = useRef<HTMLInputElement>(null)
 
-    // Dismiss flash message after 4 seconds
+    // Dismiss flash message after 5 seconds if not fromParam
     useEffect(() => {
-        if (flashMessage) {
+        if (flashMessage && !fromParam) {
             const timer = setTimeout(() => {
                 setFlashMessage(null)
-            }, 4000)
+            }, 5000)
             return () => clearTimeout(timer)
         }
-    }, [flashMessage])
+    }, [flashMessage, fromParam])
 
     // Lockout countdown timer
     useEffect(() => {
@@ -63,31 +68,45 @@ function LoginFormContent() {
         }
     }, [lockoutSecondsRemaining, isLockedOut])
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()
         setErrorMessage(null)
 
-        if (isLockedOut) return
+        if (isLockedOut || isSubmitting) return
 
-        // Validate credentials (demo simulation: any reasonable credentials or pre-filled defaults)
-        const trimmedEmail = email.trim().toLowerCase()
-        if (trimmedEmail === 'samuelson@captainstitches.com' && password.length >= 6) {
-            // Success
-            loginAdmin(trimmedEmail, rememberMe)
-            router.push('/admin')
-        } else {
-            // Failed attempt
-            const attempts = failedAttempts + 1
-            setFailedAttempts(attempts)
-            setPassword('')
-            if (attempts >= 5) {
-                setIsLockedOut(true)
-                setLockoutSecondsRemaining(900) // 15 minutes
-                setErrorMessage('Too many failed attempts. Account locked for 15 minutes.')
+        setIsSubmitting(true)
+        try {
+            const trimmedEmail = email.trim().toLowerCase()
+            const result = await loginAdminAction({
+                email: trimmedEmail,
+                password,
+                rememberMe,
+                from: fromParam || undefined,
+            })
+
+            if (result.success) {
+                // Synchronize client-side demo state
+                loginAdmin(trimmedEmail, rememberMe)
+                router.push(result.redirectUrl || '/admin')
+                router.refresh()
             } else {
-                setErrorMessage('Incorrect email or password. Please try again.')
+                const attempts = failedAttempts + 1
+                setFailedAttempts(attempts)
+                setPassword('')
+                if (attempts >= 5) {
+                    setIsLockedOut(true)
+                    setLockoutSecondsRemaining(900) // 15 minutes
+                    setErrorMessage('Too many failed attempts. Account locked for 15 minutes.')
+                } else {
+                    setErrorMessage(result.error || 'Incorrect email or password. Please try again.')
+                }
+                passwordInputRef.current?.focus()
             }
-            passwordInputRef.current?.focus()
+        } catch (err) {
+            console.error('Login error:', err)
+            setErrorMessage('Unable to connect to the atelier authentication service. Please retry.')
+        } finally {
+            setIsSubmitting(false)
         }
     }
 
@@ -146,7 +165,7 @@ function LoginFormContent() {
                         margin: '4px 0 0 0',
                     }}
                 >
-                    Bespoke Fashion Atelier
+                    Bespoke Fashion Studio
                 </p>
             </div>
 
@@ -350,23 +369,82 @@ function LoginFormContent() {
                     {/* Full-width Solid Caramel Sign In Button */}
                     <button
                         type="submit"
-                        disabled={isLockedOut}
+                        disabled={isLockedOut || isSubmitting}
                         style={{
                             width: '100%',
                             padding: '12px 20px',
                             borderRadius: '8px',
                             border: 'none',
-                            backgroundColor: isLockedOut ? '#D1C9BE' : '#C4975A',
+                            backgroundColor: isLockedOut || isSubmitting ? '#D1C9BE' : '#C4975A',
                             color: '#FFFFFF',
                             fontSize: '14px',
                             fontWeight: 600,
-                            cursor: isLockedOut ? 'not-allowed' : 'pointer',
-                            boxShadow: isLockedOut ? 'none' : '0 2px 8px rgba(196, 151, 90, 0.3)',
+                            cursor: isLockedOut || isSubmitting ? 'not-allowed' : 'pointer',
+                            boxShadow: isLockedOut || isSubmitting ? 'none' : '0 2px 8px rgba(196, 151, 90, 0.3)',
                             transition: 'background 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
                         }}
                     >
-                        {isLockedOut ? 'Account Locked' : 'Sign in to Dashboard'}
+                        {isSubmitting ? (
+                            <>
+                                <span
+                                    style={{
+                                        width: '14px',
+                                        height: '14px',
+                                        border: '2px solid rgba(255,255,255,0.4)',
+                                        borderTopColor: '#FFFFFF',
+                                        borderRadius: '50%',
+                                        display: 'inline-block',
+                                        animation: 'spin 0.8s linear infinite',
+                                    }}
+                                />
+                                Authenticating...
+                            </>
+                        ) : isLockedOut ? (
+                            'Account Locked'
+                        ) : (
+                            'Sign in to Dashboard'
+                        )}
                     </button>
+
+                    {/* Discreet Staff Hint */}
+                    <div
+                        style={{
+                            marginTop: '18px',
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            backgroundColor: '#FAF7F2',
+                            border: '1px dashed #EDE8E1',
+                            fontSize: '11px',
+                            color: '#7C6F64',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                        }}
+                    >
+                        <span>Atelier Admin: <strong>samuelson@captainstitches.com</strong></span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setEmail('samuelson@captainstitches.com')
+                                setPassword('CaptainStitches2026!')
+                            }}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#C4975A',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                padding: 0,
+                            }}
+                        >
+                            Prefill
+                        </button>
+                    </div>
                 </form>
             </div>
 

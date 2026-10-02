@@ -10,6 +10,10 @@ import {
     markRewardRedeemed,
     issueRewardManually,
 } from '@/data/adminReferralsData'
+import {
+    getAllReferralsAdminAction,
+    redeemReferralRewardAdminAction,
+} from '@/lib/actions/referrals'
 
 type FilterRewardStatus = 'all' | 'pending' | 'credited' | 'redeemed'
 type FilterRewardType = 'all' | 'discount' | 'free_item' | 'priority_slot'
@@ -65,7 +69,17 @@ export default function AdminReferralsListPage() {
     const [copiedToken, setCopiedToken] = useState<string | null>(null)
 
     useEffect(() => {
-        setReferrals(getAllReferrals())
+        const staticList = getAllReferrals()
+        setReferrals(staticList)
+
+        getAllReferralsAdminAction().then((res) => {
+            if (res.success && res.referrals.length > 0) {
+                const liveIds = new Set(res.referrals.map((r) => r.id))
+                setReferrals([...res.referrals, ...staticList.filter((s) => !liveIds.has(s.id))])
+            }
+        }).catch((err) => {
+            console.error('Failed to load live referrals list:', err)
+        })
     }, [])
 
     const showToast = (msg: string) => {
@@ -133,10 +147,17 @@ export default function AdminReferralsListPage() {
     }, [filteredReferrals, currentPage, pageSize])
 
     // Handle Redeem Confirm
-    const handleConfirmRedeem = () => {
+    const handleConfirmRedeem = async () => {
         if (!redeemModal.orderAppliedNumber.trim()) {
             alert('Please specify the order number where this reward was applied.')
             return
+        }
+
+        // Try updating in PostgreSQL
+        try {
+            await redeemReferralRewardAdminAction(redeemModal.referralId, redeemModal.target)
+        } catch (e) {
+            console.warn('DB update failed, updating UI state:', e)
         }
 
         const updated = markRewardRedeemed(
@@ -144,7 +165,33 @@ export default function AdminReferralsListPage() {
             redeemModal.target,
             redeemModal.orderAppliedNumber.trim()
         )
-        setReferrals(updated)
+        setReferrals((prev) => {
+            const staticUpdated = updated
+            return prev.map((r) => {
+                if (r.id === redeemModal.referralId) {
+                    if (redeemModal.target === 'referrer') {
+                        return {
+                            ...r,
+                            referrerReward: {
+                                ...r.referrerReward,
+                                status: 'redeemed' as const,
+                                orderAppliedNumber: redeemModal.orderAppliedNumber.trim(),
+                            },
+                        }
+                    } else {
+                        return {
+                            ...r,
+                            referredCustomerReward: {
+                                ...r.referredCustomerReward,
+                                status: 'redeemed' as const,
+                                orderAppliedNumber: redeemModal.orderAppliedNumber.trim(),
+                            },
+                        }
+                    }
+                }
+                return r
+            })
+        })
         setRedeemModal({
             isOpen: false,
             referralId: '',
@@ -159,7 +206,7 @@ export default function AdminReferralsListPage() {
     // Handle Manual Issuance Confirm
     const handleConfirmManualIssue = () => {
         if (!manualModal.reason.trim()) {
-            alert('Please provide a reason or internal atelier note for this manual reward.')
+            alert('Please provide a reason or internal note for this manual reward.')
             return
         }
 
@@ -1004,7 +1051,7 @@ export default function AdminReferralsListPage() {
 
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>
-                                    Internal Atelier Reason
+                                    Internal Reason
                                 </label>
                                 <textarea
                                     rows={3}

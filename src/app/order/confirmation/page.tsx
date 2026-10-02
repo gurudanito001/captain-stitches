@@ -1,6 +1,6 @@
 'use client'
 
-import { use, Suspense } from 'react'
+import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Navbar } from '@/components/layout/Navbar'
@@ -25,87 +25,215 @@ function ConfirmationContent() {
     <>
       <Navbar />
 
-      <main id="main-content" className="bg-brown-900 min-h-screen pt-32 pb-24 flex items-center justify-center">
-        <div className="container-brand max-w-xl text-center">
-          {/* Success Checkmark Circle */}
-          <div className="mx-auto w-16 h-16 rounded-full bg-caramel-500/10 border border-caramel-500 flex items-center justify-center mb-8 animate-scaleIn">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="2"
-              stroke="currentColor"
-              className="w-8 h-8 text-caramel-500"
+      <main
+        id="main-content"
+        className="bg-[#0C0704] min-h-screen text-cream-100 flex items-center justify-center"
+        style={{
+          paddingTop: 'clamp(7rem, 12vw, 10rem)',
+          paddingBottom: 'clamp(4rem, 8vw, 6.5rem)',
+          paddingLeft: 'clamp(1rem, 4vw, 2.5rem)',
+          paddingRight: 'clamp(1rem, 4vw, 2.5rem)',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div
+          className="container-brand"
+          style={{
+            maxWidth: '680px',
+            width: '100%',
+            margin: '0 auto',
+            boxSizing: 'border-box',
+          }}
+        >
+          {/* Confirmed Card in Royal Heritage Emerald (#071A14) */}
+          <div
+            className="rounded-3xl border border-[#10B981]/30 bg-[#071A14]/90 shadow-2xl"
+            style={{
+              padding: 'clamp(2rem, 5vw, 3.5rem)',
+              boxSizing: 'border-box',
+            }}
+          >
+            {/* Success Checkmark Circle */}
+            <div
+              className="rounded-full bg-[#C4975A]/20 border-2 border-[#C4975A] flex items-center justify-center animate-scaleIn shadow-lg shadow-[#C4975A]/20"
+              style={{ width: '72px', height: '72px', margin: '0 auto 1.5rem auto' }}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-          </div>
-
-          <SectionEyebrow label="Order Confirmed" />
-          <h1 className="text-heading-lg text-cream-200 mt-2 font-normal">
-            Bespoke Order Placed
-          </h1>
-          <p className="text-body text-stone-300 mt-4 leading-relaxed">
-            Thank you for choosing CaptainStitches. Your deposit has been securely processed and your order has been registered in our tailoring workshop.
-          </p>
-
-          {/* Order Details Invoice Card */}
-          <div className="my-8 p-6 bg-brown-950/40 border border-brown-850 text-left flex flex-col gap-3 font-body text-xs text-stone-300">
-            <div className="flex justify-between border-b border-brown-900 pb-2">
-              <span className="text-stone-500 font-semibold uppercase tracking-wider text-[10px]">Order reference:</span>
-              <strong className="text-caramel-400 font-body text-sm font-semibold tracking-wider">{orderId}</strong>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="2.5"
+                stroke="currentColor"
+                className="text-[#E8D4B0]"
+                style={{ width: '36px', height: '36px' }}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
             </div>
-            <div className="flex justify-between">
-              <span>Selected Piece:</span>
-              <span className="text-cream-200 font-semibold">{formattedDesignName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Deposit Paid (50%):</span>
-              <span className="text-cream-200 font-semibold">
-                {currency === 'EUR' ? `€${(parseInt(total) / 2).toFixed(0)}` : `₦${(parseInt(total) / 2).toLocaleString('en-NG')}`}
+
+            <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+              <span
+                className="inline-block text-[#34D399] font-bold text-xs tracking-[0.2em] uppercase"
+                style={{ marginBottom: '8px' }}
+              >
+                Deposit Confirmed · Commission Registered
               </span>
+              <h1
+                className="font-serif text-cream-100 font-bold leading-tight"
+                style={{ fontSize: 'clamp(2rem, 4vw, 2.75rem)', marginBottom: '0.75rem' }}
+              >
+                Bespoke Order Secured
+              </h1>
+              <p
+                className="font-body text-stone-300 text-xs sm:text-sm leading-relaxed"
+                style={{ maxWidth: '520px', margin: '0 auto' }}
+              >
+                Thank you for patronizing CaptainStitches. Your 50% deposit has been processed and your custom commission has been transmitted to our tailoring workshop.
+              </p>
             </div>
-            <div className="flex justify-between text-stone-500 border-t border-brown-900 pt-2">
-              <span>Remaining Balance:</span>
-              <span className="text-stone-400 font-semibold">
-                {currency === 'EUR' ? `€${(parseInt(total) / 2).toFixed(0)}` : `₦${(parseInt(total) / 2).toLocaleString('en-NG')}`}
-              </span>
-            </div>
-          </div>
 
-          {/* What Happens Next Section */}
-          <div className="mb-10 text-left">
-            <h3 className="text-label text-caramel-400 font-bold mb-4">What Happens Next</h3>
-            <ul className="flex flex-col gap-4 font-body text-xs text-stone-400" role="list">
-              <li className="flex gap-3">
-                <span className="text-caramel-500 font-semibold shrink-0">01 /</span>
-                <span>Our head tailor reviews your custom body measurements. We will contact you via WhatsApp if any details require adjustment.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="text-caramel-500 font-semibold shrink-0">02 /</span>
-                <span>Fabric cutting and assembly starts in our Nigerian workshop. You can track live progress anytime using your Order ID.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="text-caramel-500 font-semibold shrink-0">03 /</span>
-                <span>When complete, inspection photos & videos will be uploaded. The remaining 50% balance is requested prior to DHL courier dispatch.</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button href={`/track?id=${orderId}`} variant="primary" size="md" className="flex-1">
-              Track Your Order
-            </Button>
-            <Button
-              href={`https://wa.me/message/PLACEHOLDER?text=Hello%20CaptainStitches,%20I%20just%20placed%20order%20${orderId}`}
-              variant="outline"
-              size="md"
-              external
-              className="flex-1"
+            {/* Order Invoice Summary Card */}
+            <div
+              className="rounded-2xl bg-[#0C0704]/75 border border-[#10B981]/30 text-left font-body text-xs text-stone-300"
+              style={{
+                padding: '1.5rem',
+                marginBottom: '2rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
             >
-              Chat on WhatsApp
-            </Button>
+              <div
+                className="flex justify-between items-center border-b border-brown-800/80"
+                style={{ paddingBottom: '12px' }}
+              >
+                <span className="text-stone-400 font-semibold uppercase tracking-wider text-[10px]">
+                  Order Reference:
+                </span>
+                <strong className="text-[#C4975A] font-mono text-sm font-bold tracking-wider">
+                  {orderId}
+                </strong>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-stone-400">Commissioned Silhouette:</span>
+                <span className="text-cream-100 font-semibold">{formattedDesignName}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-stone-400">50% Deposit Paid:</span>
+                <span className="text-[#34D399] font-bold">
+                  {currency === 'EUR'
+                    ? `€${(parseInt(total) / 2).toFixed(0)}`
+                    : `₦${(parseInt(total) / 2).toLocaleString('en-NG')}`}
+                </span>
+              </div>
+
+              <div
+                className="flex justify-between items-center text-stone-400 border-t border-brown-800/80"
+                style={{ paddingTop: '12px' }}
+              >
+                <span>Remaining Balance (Due Upon Video Sign-off):</span>
+                <span className="text-cream-200 font-semibold">
+                  {currency === 'EUR'
+                    ? `€${(parseInt(total) / 2).toFixed(0)}`
+                    : `₦${(parseInt(total) / 2).toLocaleString('en-NG')}`}
+                </span>
+              </div>
+            </div>
+
+            {/* Next Steps Roadmap */}
+            <div style={{ textAlign: 'left', marginBottom: '2rem' }}>
+              <h3
+                className="text-xs uppercase tracking-widest text-[#C4975A] font-bold"
+                style={{ marginBottom: '14px' }}
+              >
+                What Happens Next
+              </h3>
+              <ul
+                className="font-body text-xs text-stone-300"
+                role="list"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '14px',
+                  margin: 0,
+                  padding: 0,
+                  listStyle: 'none',
+                }}
+              >
+                <li style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <span className="text-[#34D399] font-bold shrink-0" style={{ minWidth: '32px' }}>
+                    01 /
+                  </span>
+                  <span style={{ lineHeight: 1.6 }}>
+                    Our head tailor in Verona reviews your submitted measurements against our sizing templates. We will reach out on WhatsApp if anything requires clarification.
+                  </span>
+                </li>
+                <li style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <span className="text-[#34D399] font-bold shrink-0" style={{ minWidth: '32px' }}>
+                    02 /
+                  </span>
+                  <span style={{ lineHeight: 1.6 }}>
+                    Fabric chalking and hand-cutting starts at our Nigerian atelier. You can track real-time workshop milestones anytime using your Order ID.
+                  </span>
+                </li>
+                <li style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <span className="text-[#34D399] font-bold shrink-0" style={{ minWidth: '32px' }}>
+                    03 /
+                  </span>
+                  <span style={{ lineHeight: 1.6 }}>
+                    Upon completion, detailed inspection photos and a 360° fit video will be provided for your approval before final dispatch via DHL Express courier.
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: '14px',
+                justifyContent: 'center',
+                width: '100%',
+              }}
+            >
+              <Button
+                href={`/track?id=${orderId}`}
+                variant="primary"
+                size="md"
+                style={{
+                  padding: '14px 28px',
+                  borderRadius: '12px',
+                  flex: 1,
+                  minWidth: '200px',
+                  textAlign: 'center',
+                }}
+              >
+                Track Live Progress
+              </Button>
+              <Button
+                href={`https://wa.me/2348000000000?text=${encodeURIComponent(
+                  `Hello CaptainStitches, I just placed order ${orderId} for the ${formattedDesignName}.`
+                )}`}
+                variant="outline"
+                size="md"
+                external
+                style={{
+                  padding: '14px 28px',
+                  borderRadius: '12px',
+                  borderColor: '#E8D4B0',
+                  color: '#E8D4B0',
+                  flex: 1,
+                  minWidth: '200px',
+                  textAlign: 'center',
+                }}
+              >
+                Chat on WhatsApp
+              </Button>
+            </div>
           </div>
         </div>
       </main>
@@ -117,11 +245,19 @@ function ConfirmationContent() {
 
 export default function ConfirmationPage() {
   return (
-    <Suspense fallback={
-      <div className="bg-brown-900 min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-caramel-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div
+          className="bg-[#0C0704] min-h-screen flex items-center justify-center"
+          style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <div
+            className="border-2 border-[#C4975A] border-t-transparent rounded-full animate-spin"
+            style={{ width: '36px', height: '36px' }}
+          />
+        </div>
+      }
+    >
       <ConfirmationContent />
     </Suspense>
   )

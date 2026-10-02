@@ -13,6 +13,7 @@ import {
     INITIAL_ACTIVITY_FEED,
     ReferralActivityEvent,
 } from '@/data/adminReferralsData'
+import { getAllReferralsAdminAction } from '@/lib/actions/referrals'
 
 type ChartMetric = 'conversions' | 'visits' | 'rewards'
 type ChartRange = '30days' | '3months' | '6months' | 'all'
@@ -26,8 +27,18 @@ export default function AdminReferralsOverviewPage() {
     const [toastMessage, setToastMessage] = useState<string | null>(null)
 
     useEffect(() => {
-        setReferrals(getAllReferrals())
+        const staticList = getAllReferrals()
+        setReferrals(staticList)
         setConfig(getProgrammeConfig())
+
+        getAllReferralsAdminAction().then((res) => {
+            if (res.success && res.referrals.length > 0) {
+                const liveIds = new Set(res.referrals.map((r) => r.id))
+                setReferrals([...res.referrals, ...staticList.filter((s) => !liveIds.has(s.id))])
+            }
+        }).catch((err) => {
+            console.error('Failed to load live referrals:', err)
+        })
     }, [])
 
     const showToast = (msg: string) => {

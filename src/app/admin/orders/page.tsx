@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
     AdminOrder,
     OrderStatus,
@@ -10,8 +10,10 @@ import {
     STAGES_PIPELINE,
     TAILORS_ROSTER,
     getAllOrders,
+    saveAllOrders,
     updateOrderStatus,
 } from '@/data/adminOrdersData'
+import { getAllOrdersAdminAction, updateOrderStatusAdminAction } from '@/lib/actions/orders'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
 const IconSearch = () => (
@@ -42,11 +44,15 @@ const IconChevronRight = () => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '14px', height: '14px', color: '#8A7A6E', flexShrink: 0 }}><polyline points="9 18 15 12 9 6" /></svg>
 )
 
-export default function AdminOrdersBoardPage() {
+function AdminOrdersBoardContent() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const stageQuery = searchParams.get('stage') || searchParams.get('filter')
+
     const [orders, setOrders] = useState<AdminOrder[]>([])
     const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
     const [searchQuery, setSearchQuery] = useState('')
+    const [stageFilter, setStageFilter] = useState<'All' | OrderStatus>('All')
     const [locationFilter, setLocationFilter] = useState<'All' | Location>('All')
     const [tailorFilter, setTailorFilter] = useState<string>('All')
     const [depositFilter, setDepositFilter] = useState<'All' | 'PAID' | 'UNPAID'>('All')
@@ -54,9 +60,35 @@ export default function AdminOrdersBoardPage() {
     const [draggedOrderId, setDraggedOrderId] = useState<string | null>(null)
     const [dragOverColumn, setDragOverColumn] = useState<OrderStatus | null>(null)
 
-    // Load orders on mount
+    // Sync URL stage query to stageFilter
     useEffect(() => {
-        setOrders(getAllOrders())
+        if (stageQuery) {
+            const norm = stageQuery.toUpperCase()
+            if (norm === 'INSPECTION') {
+                setStageFilter('INSPECTION')
+            } else if (STAGES_PIPELINE.some((s) => s.key === norm)) {
+                setStageFilter(norm as OrderStatus)
+            }
+        }
+    }, [stageQuery])
+
+    // Load orders on mount from database
+    const loadOrders = async () => {
+        try {
+            const res = await getAllOrdersAdminAction()
+            if (res.success && res.orders && res.orders.length > 0) {
+                setOrders(res.orders)
+                saveAllOrders(res.orders)
+            } else {
+                setOrders(getAllOrders())
+            }
+        } catch {
+            setOrders(getAllOrders())
+        }
+    }
+
+    useEffect(() => {
+        loadOrders()
     }, [])
 
     // Filtered orders
@@ -82,13 +114,17 @@ export default function AdminOrdersBoardPage() {
             if (depositFilter !== 'All' && order.payment.depositStatus !== depositFilter) {
                 return false
             }
+            // Stage filter
+            if (stageFilter !== 'All' && order.status !== stageFilter) {
+                return false
+            }
             // Overdue filter
             if (overdueOnly && !order.isOverdue) {
                 return false
             }
             return true
         })
-    }, [orders, searchQuery, locationFilter, tailorFilter, depositFilter, overdueOnly])
+    }, [orders, searchQuery, stageFilter, locationFilter, tailorFilter, depositFilter, overdueOnly])
 
     // Grouping by status
     const ordersByStage = useMemo(() => {
@@ -128,7 +164,7 @@ export default function AdminOrdersBoardPage() {
         }
     }
 
-    const handleDrop = (e: React.DragEvent, newStage: OrderStatus) => {
+    const handleDrop = async (e: React.DragEvent, newStage: OrderStatus) => {
         e.preventDefault()
         const orderId = e.dataTransfer.getData('text/plain') || draggedOrderId
         setDragOverColumn(null)
@@ -137,6 +173,10 @@ export default function AdminOrdersBoardPage() {
         if (orderId) {
             updateOrderStatus(orderId, newStage)
             setOrders(getAllOrders())
+            await updateOrderStatusAdminAction(orderId, newStage).catch(console.error)
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('admin-counts-update'))
+            }
         }
     }
 
@@ -367,6 +407,53 @@ export default function AdminOrdersBoardPage() {
                         gap: '0.75rem',
                     }}
                 >
+                    {/* Stage Filter */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8A7A6E', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Stage:
+                        </span>
+                        <select
+                            value={stageFilter}
+                            onChange={(e) => setStageFilter(e.target.value as 'All' | OrderStatus)}
+                            style={{
+                                border: stageFilter !== 'All' ? '1px solid #C4975A' : '1px solid #E5DFD7',
+                                backgroundColor: stageFilter !== 'All' ? '#FDF3E7' : '#FAF7F2',
+                                color: stageFilter !== 'All' ? '#C4975A' : '#1C0F07',
+                                fontWeight: stageFilter !== 'All' ? 700 : 500,
+                                fontSize: '0.78rem',
+                                padding: '0.35rem 0.65rem',
+                                borderRadius: '7px',
+                                outline: 'none',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <option value="All">All Stages</option>
+                            {STAGES_PIPELINE.map((st) => (
+                                <option key={st.key} value={st.key}>
+                                    {st.label}
+                                </option>
+                            ))}
+                        </select>
+                        {stageFilter !== 'All' && (
+                            <button
+                                type="button"
+                                onClick={() => setStageFilter('All')}
+                                style={{
+                                    border: 'none',
+                                    background: '#FAF7F2',
+                                    color: '#A8998C',
+                                    cursor: 'pointer',
+                                    fontSize: '0.75rem',
+                                    padding: '0.2rem 0.45rem',
+                                    borderRadius: '5px',
+                                }}
+                                title="Clear stage filter"
+                            >
+                                ✕
+                            </button>
+                        )}
+                    </div>
+
                     {/* Location Filter */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                         <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8A7A6E', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -488,6 +575,7 @@ export default function AdminOrdersBoardPage() {
                     {STAGES_PIPELINE.map((stage) => {
                         const columnOrders = ordersByStage[stage.key] || []
                         const isDragOver = dragOverColumn === stage.key
+                        const isFilteredStage = stageFilter === stage.key
 
                         return (
                             <div
@@ -496,13 +584,18 @@ export default function AdminOrdersBoardPage() {
                                 onDragLeave={() => handleDragLeave(stage.key)}
                                 onDrop={(e) => handleDrop(e, stage.key)}
                                 style={{
-                                    backgroundColor: isDragOver ? '#F8F1E7' : '#F7F4EE',
-                                    border: isDragOver ? '2px dashed #C4975A' : '1px solid #EAE3D9',
+                                    backgroundColor: isDragOver ? '#F8F1E7' : isFilteredStage ? '#FFFDF9' : '#F7F4EE',
+                                    border: isDragOver
+                                        ? '2px dashed #C4975A'
+                                        : isFilteredStage
+                                        ? '2px solid #C4975A'
+                                        : '1px solid #EAE3D9',
                                     borderRadius: '14px',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     minHeight: '580px',
-                                    transition: 'background-color 0.15s ease, border-color 0.15s ease',
+                                    boxShadow: isFilteredStage ? '0 0 18px rgba(196, 151, 90, 0.22)' : 'none',
+                                    transition: 'all 0.15s ease',
                                 }}
                             >
                                 {/* Column Header */}
@@ -867,5 +960,19 @@ export default function AdminOrdersBoardPage() {
                 </div>
             )}
         </div>
+    )
+}
+
+export default function AdminOrdersBoardPage() {
+    return (
+        <Suspense
+            fallback={
+                <div style={{ padding: '3rem', textAlign: 'center', color: '#8A7A6E', fontSize: '0.875rem' }}>
+                    Loading studio order board...
+                </div>
+            }
+        >
+            <AdminOrdersBoardContent />
+        </Suspense>
     )
 }

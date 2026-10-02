@@ -10,6 +10,8 @@ import {
     getAllOrders,
     updateOrder,
 } from '@/data/adminOrdersData'
+import { ColourSelector } from '@/components/common/ColourSelector'
+import { ATELIER_PALETTE } from '@/lib/utils/colours'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
 const IconArrowLeft = () => (
@@ -68,8 +70,8 @@ export default function EditOrderPage() {
         if (found) {
             setOrder(found)
             setDesignName(found.design.name)
-            setFabric(found.design.fabric)
-            setColour(found.design.colour)
+            setFabric(found.design.fabric || '')
+            setColour(found.design.colour || '')
             setSpecialInstructions(found.design.specialInstructions || '')
             setOccasion(found.details.occasion)
             setDeadline(found.details.deadline)
@@ -314,14 +316,12 @@ export default function EditOrderPage() {
                         </div>
 
                         <div>
-                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
-                                Colour Choice
-                            </label>
-                            <input
-                                type="text"
+                            <ColourSelector
+                                label="Colour Choice"
+                                options={ATELIER_PALETTE}
                                 value={colour}
-                                onChange={(e) => setColour(e.target.value)}
-                                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
+                                onChange={(val) => setColour(val)}
+                                darkMode={false}
                             />
                         </div>
 
@@ -380,7 +380,7 @@ export default function EditOrderPage() {
 
                         <div>
                             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
-                                Estimated Atelier Delivery Date
+                                Estimated Delivery Date
                             </label>
                             <input
                                 type="date"
