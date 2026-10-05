@@ -108,15 +108,15 @@ export async function getOrCreateReferralCodeAction(customerInput: string, optio
                     ...(secondary.query ? [{ email: { equals: secondary.query, mode: 'insensitive' as const } }] : []),
                     ...(cleanDigits.length >= 7
                         ? [
-                              { phone: { contains: cleanDigits } },
-                              { whatsapp: { contains: cleanDigits } },
-                          ]
+                            { phone: { contains: cleanDigits } },
+                            { whatsapp: { contains: cleanDigits } },
+                        ]
                         : []),
                     ...(secondary.cleanDigits.length >= 7
                         ? [
-                              { phone: { contains: secondary.cleanDigits } },
-                              { whatsapp: { contains: secondary.cleanDigits } },
-                          ]
+                            { phone: { contains: secondary.cleanDigits } },
+                            { whatsapp: { contains: secondary.cleanDigits } },
+                        ]
                         : []),
                     { firstName: { contains: query, mode: 'insensitive' as const } },
                     { lastName: { contains: query, mode: 'insensitive' as const } },
@@ -191,7 +191,7 @@ export async function getOrCreateReferralCodeAction(customerInput: string, optio
             })
         }
 
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        const appUrl = process.env.APP_URL || 'http://localhost:3000'
         const referralUrl = `${appUrl}/ref/${activeReferral.token}`
 
         return {
@@ -226,9 +226,9 @@ export async function getReferralDashboardAction(customerInput: string): Promise
                     { email: { equals: query, mode: 'insensitive' as const } },
                     ...(cleanDigits.length >= 7
                         ? [
-                              { phone: { contains: cleanDigits } },
-                              { whatsapp: { contains: cleanDigits } },
-                          ]
+                            { phone: { contains: cleanDigits } },
+                            { whatsapp: { contains: cleanDigits } },
+                        ]
                         : []),
                     { firstName: { contains: query, mode: 'insensitive' as const } },
                     { lastName: { contains: query, mode: 'insensitive' as const } },
@@ -271,7 +271,7 @@ export async function getReferralDashboardAction(customerInput: string): Promise
             })
         }
 
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        const appUrl = process.env.APP_URL || 'http://localhost:3000'
         const referralUrl = `${appUrl}/ref/${primaryShare.token}`
 
         // Calculate conversions and history
@@ -550,27 +550,27 @@ export async function getAllReferralsAdminAction(): Promise<{
 
             const referredRef: ReferralCustomerRef = referred
                 ? {
-                      id: referred.id,
-                      name: `${referred.firstName} ${referred.lastName}`.trim(),
-                      avatarColor: '#10B981',
-                      initials: `${referred.firstName[0] || ''}${referred.lastName[0] || ''}`.toUpperCase(),
-                      location: referred.deliveryLocation === PrismaDeliveryLocation.ITALY ? 'Italy' : 'Nigeria',
-                      email: referred.email || '',
-                      phone: referred.phone,
-                      totalSent: 0,
-                      totalConverted: 1,
-                  }
+                    id: referred.id,
+                    name: `${referred.firstName} ${referred.lastName}`.trim(),
+                    avatarColor: '#10B981',
+                    initials: `${referred.firstName[0] || ''}${referred.lastName[0] || ''}`.toUpperCase(),
+                    location: referred.deliveryLocation === PrismaDeliveryLocation.ITALY ? 'Italy' : 'Nigeria',
+                    email: referred.email || '',
+                    phone: referred.phone,
+                    totalSent: 0,
+                    totalConverted: 1,
+                }
                 : {
-                      id: 'pending-friend',
-                      name: 'Pending Patron',
-                      avatarColor: '#6B7280',
-                      initials: '??',
-                      location: 'Italy',
-                      email: '',
-                      phone: '',
-                      totalSent: 0,
-                      totalConverted: 0,
-                  }
+                    id: 'pending-friend',
+                    name: 'Pending Patron',
+                    avatarColor: '#6B7280',
+                    initials: '??',
+                    location: 'Italy',
+                    email: '',
+                    phone: '',
+                    totalSent: 0,
+                    totalConverted: 0,
+                }
 
             const conversionStatus: ConversionStatus = r.convertedOrder
                 ? r.convertedOrder.depositPaid || r.convertedOrder.balancePaid
@@ -600,7 +600,7 @@ export async function getAllReferralsAdminAction(): Promise<{
                 dateRedeemed: r.referredRedeemedAt?.toISOString().slice(0, 10),
             }
 
-            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://captainstitches.com'
+            const appUrl = process.env.APP_URL || 'https://captainstitches.com'
 
             return {
                 id: r.id,
@@ -614,14 +614,14 @@ export async function getAllReferralsAdminAction(): Promise<{
                 conversionStatus,
                 linkedOrder: r.convertedOrder
                     ? {
-                          id: r.convertedOrder.id,
-                          orderNumber: r.convertedOrder.orderNumber,
-                          garmentName: r.convertedOrder.design?.nameEN || 'Bespoke Order',
-                          amountNGN: r.convertedOrder.currency === PrismaCurrency.NGN ? r.convertedOrder.totalAmount : r.convertedOrder.totalAmount * 1750,
-                          amountEUR: r.convertedOrder.currency === PrismaCurrency.EUR ? r.convertedOrder.totalAmount : Math.round(r.convertedOrder.totalAmount / 1750),
-                          datePlaced: r.convertedOrder.createdAt.toISOString().slice(0, 10),
-                          paymentStatus: r.convertedOrder.balancePaid ? 'PAID' : r.convertedOrder.depositPaid ? 'DEPOSIT_PAID' : 'UNPAID',
-                      }
+                        id: r.convertedOrder.id,
+                        orderNumber: r.convertedOrder.orderNumber,
+                        garmentName: r.convertedOrder.design?.nameEN || 'Bespoke Order',
+                        amountNGN: r.convertedOrder.currency === PrismaCurrency.NGN ? r.convertedOrder.totalAmount : r.convertedOrder.totalAmount * 1750,
+                        amountEUR: r.convertedOrder.currency === PrismaCurrency.EUR ? r.convertedOrder.totalAmount : Math.round(r.convertedOrder.totalAmount / 1750),
+                        datePlaced: r.convertedOrder.createdAt.toISOString().slice(0, 10),
+                        paymentStatus: r.convertedOrder.balancePaid ? 'PAID' : r.convertedOrder.depositPaid ? 'DEPOSIT_PAID' : 'UNPAID',
+                    }
                     : undefined,
                 referrerReward,
                 referredCustomerReward: referredReward,
@@ -636,15 +636,15 @@ export async function getAllReferralsAdminAction(): Promise<{
                     },
                     ...(r.convertedOrder
                         ? [
-                              {
-                                  id: `evt-2-${r.id}`,
-                                  event: 'Converted to Bespoke Commission',
-                                  date: r.convertedOrder.createdAt.toISOString().slice(0, 10),
-                                  time: '14:30',
-                                  description: `Order ${r.convertedOrder.orderNumber} placed using token ${r.token}.`,
-                                  actor: referredRef.name,
-                              },
-                          ]
+                            {
+                                id: `evt-2-${r.id}`,
+                                event: 'Converted to Bespoke Commission',
+                                date: r.convertedOrder.createdAt.toISOString().slice(0, 10),
+                                time: '14:30',
+                                description: `Order ${r.convertedOrder.orderNumber} placed using token ${r.token}.`,
+                                actor: referredRef.name,
+                            },
+                        ]
                         : []),
                 ],
             }
