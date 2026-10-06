@@ -317,6 +317,8 @@ export default function CreateOrderPage() {
     const [depositAmount, setDepositAmount] = useState(34)
     const [paymentMethod, setPaymentMethod] = useState<'Stripe' | 'Paystack' | 'Manual Bank Transfer' | 'Cash'>('Stripe')
     const [markDepositAsPaid, setMarkDepositAsPaid] = useState(false)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [submitError, setSubmitError] = useState<string | null>(null)
 
     // Autocomplete customers search against database records
     const filteredCustomers = useMemo(() => {
@@ -418,6 +420,22 @@ export default function CreateOrderPage() {
 
     // Submit and create order
     const handleCreateOrder = async () => {
+        if (isSubmitting) return
+
+        if (depositAmount > totalAmount) {
+            setSubmitError('Deposit amount cannot exceed total commission price.')
+            return
+        }
+
+        const todayStr = new Date().toISOString().split('T')[0]
+        if (deadline && deadline < todayStr) {
+            setSubmitError('Production deadline date cannot be in the past.')
+            return
+        }
+
+        setIsSubmitting(true)
+        setSubmitError(null)
+
         let activeCustomer: CustomerProfile
 
         if (isNewCustomer) {
@@ -566,12 +584,18 @@ export default function CreateOrderPage() {
                 updateOrder(dbRes.order)
                 finalId = dbRes.order.id
             } else {
-                updateOrder(createdOrder)
+                setSubmitError(dbRes.error || 'Failed to save order in database.')
+                setIsSubmitting(false)
+                return
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('Error saving order to database:', e)
-            updateOrder(createdOrder)
+            setSubmitError(e?.message || 'Unexpected error creating order.')
+            setIsSubmitting(false)
+            return
         }
+
+        setIsSubmitting(false)
 
         // Notify sidebar & components to refresh database counts
         if (typeof window !== 'undefined') {
@@ -948,6 +972,11 @@ export default function CreateOrderPage() {
                                         onChange={(e) => setNewCustomer({ ...newCustomer, whatsapp: e.target.value, phone: e.target.value })}
                                         style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
                                     />
+                                    {!newCustomer.whatsapp.trim() && newCustomer.email.trim() && (
+                                        <span style={{ fontSize: '0.725rem', color: '#B45309', marginTop: '0.25rem', display: 'block', fontWeight: 600 }}>
+                                            ⚠️ WhatsApp updates require a valid phone number with country code.
+                                        </span>
+                                    )}
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.25rem' }}>Email Address</label>
@@ -1759,9 +1788,15 @@ export default function CreateOrderPage() {
                                 <input
                                     type="date"
                                     value={deadline}
+                                    min={new Date().toISOString().split('T')[0]}
                                     onChange={(e) => setDeadline(e.target.value)}
                                     style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '0.85rem' }}
                                 />
+                                {deadline && deadline < new Date().toISOString().split('T')[0] && (
+                                    <span style={{ fontSize: '0.725rem', color: '#DC2626', marginTop: '0.25rem', display: 'block', fontWeight: 600 }}>
+                                        Production deadline date cannot be in the past.
+                                    </span>
+                                )}
                             </div>
 
                             <div>
@@ -1875,11 +1910,17 @@ export default function CreateOrderPage() {
                                     type="number"
                                     value={depositAmount}
                                     onChange={(e) => setDepositAmount(parseFloat(e.target.value) || 0)}
-                                    style={{ width: '100%', padding: '0.65rem', borderRadius: '8px', border: '1px solid #E0D7CB', fontSize: '1.1rem', fontWeight: 800, color: '#2B2B2B' }}
+                                    style={{ width: '100%', padding: '0.65rem', borderRadius: '8px', border: depositAmount > totalAmount ? '1px solid #DC2626' : '1px solid #E0D7CB', fontSize: '1.1rem', fontWeight: 800, color: '#2B2B2B' }}
                                 />
-                                <span style={{ fontSize: '0.725rem', color: '#8A7A6E', marginTop: '0.2rem', display: 'block' }}>
-                                    Balance due before dispatch: {currency === 'EUR' ? `€${totalAmount - depositAmount}` : `₦${(totalAmount - depositAmount).toLocaleString()}`}
-                                </span>
+                                {depositAmount > totalAmount ? (
+                                    <span style={{ fontSize: '0.725rem', color: '#DC2626', marginTop: '0.25rem', display: 'block', fontWeight: 600 }}>
+                                        Deposit amount cannot exceed total commission price.
+                                    </span>
+                                ) : (
+                                    <span style={{ fontSize: '0.725rem', color: '#8A7A6E', marginTop: '0.2rem', display: 'block' }}>
+                                        Balance due before dispatch: {currency === 'EUR' ? `€${totalAmount - depositAmount}` : `₦${(totalAmount - depositAmount).toLocaleString()}`}
+                                    </span>
+                                )}
                             </div>
 
                             <div style={{ gridColumn: 'span 2' }}>
@@ -2100,27 +2141,35 @@ export default function CreateOrderPage() {
                             Continue to Step {currentStep + 1} →
                         </button>
                     ) : (
-                        <button
-                            type="button"
-                            onClick={handleCreateOrder}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                padding: '0.75rem 1.75rem',
-                                borderRadius: '10px',
-                                border: 'none',
-                                backgroundColor: '#166534',
-                                color: '#FFFFFF',
-                                fontSize: '0.9rem',
-                                fontWeight: 800,
-                                cursor: 'pointer',
-                                boxShadow: '0 3px 10px rgba(22,101,52,0.3)',
-                            }}
-                        >
-                            <IconCheck />
-                            <span>Create Order & Send WhatsApp Confirmation</span>
-                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+                            <button
+                                type="button"
+                                onClick={handleCreateOrder}
+                                disabled={isSubmitting || depositAmount > totalAmount}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    padding: '0.75rem 1.75rem',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    backgroundColor: isSubmitting || depositAmount > totalAmount ? '#9CA3AF' : '#166534',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 800,
+                                    cursor: isSubmitting || depositAmount > totalAmount ? 'not-allowed' : 'pointer',
+                                    boxShadow: isSubmitting || depositAmount > totalAmount ? 'none' : '0 3px 10px rgba(22,101,52,0.3)',
+                                }}
+                            >
+                                <IconCheck />
+                                <span>{isSubmitting ? 'Creating Order...' : 'Create Order & Send WhatsApp Confirmation'}</span>
+                            </button>
+                            {submitError && (
+                                <div style={{ fontSize: '0.75rem', color: '#DC2626', fontWeight: 600 }}>
+                                    {submitError}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>

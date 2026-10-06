@@ -753,9 +753,10 @@ export const INITIAL_ADMIN_SETTINGS: MasterAdminSettings = {
 }
 
 // STORAGE HELPERS
+let inMemorySettings: MasterAdminSettings = JSON.parse(JSON.stringify(INITIAL_ADMIN_SETTINGS))
 
 export function getAdminSettings(): MasterAdminSettings {
-    if (typeof window === 'undefined') return INITIAL_ADMIN_SETTINGS
+    if (typeof window === 'undefined') return inMemorySettings
     try {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (!stored) {
@@ -764,11 +765,12 @@ export function getAdminSettings(): MasterAdminSettings {
         }
         return JSON.parse(stored)
     } catch {
-        return INITIAL_ADMIN_SETTINGS
+        return inMemorySettings
     }
 }
 
 export function saveAdminSettings(settings: MasterAdminSettings): void {
+    inMemorySettings = JSON.parse(JSON.stringify(settings))
     if (typeof window === 'undefined') return
     try {
         settings.lastUpdated = new Date().toLocaleString('en-GB', {
@@ -785,6 +787,7 @@ export function saveAdminSettings(settings: MasterAdminSettings): void {
 }
 
 export function resetSettingsToDefaults(): MasterAdminSettings {
+    inMemorySettings = JSON.parse(JSON.stringify(INITIAL_ADMIN_SETTINGS))
     if (typeof window !== 'undefined') {
         localStorage.removeItem(STORAGE_KEY)
     }

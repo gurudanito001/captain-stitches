@@ -9,6 +9,7 @@ import { getPublishedDesignsAction, PublicDesignItem } from '@/lib/actions/catal
 import { ColourSelector } from '@/components/common/ColourSelector'
 import { validateReferralCodeAction } from '@/lib/actions/referrals'
 import { createPublicOrderAction } from '@/lib/actions/orders'
+import { uploadMediaAction } from '@/lib/actions/upload'
 
 const CUSTOM_DESIGN = {
   name: 'Custom African Reference Design',
@@ -146,6 +147,8 @@ function OrderFormContent() {
   const [isCustomUpload, setIsCustomUpload] = useState(initialDesignSlug === 'custom')
   const [customFile, setCustomFile] = useState<File | null>(null)
   const [customFilePreview, setCustomFilePreview] = useState<string>('')
+  const [isUploadingToCloudinary, setIsUploadingToCloudinary] = useState(false)
+  const [cloudinaryUrl, setCloudinaryUrl] = useState<string>('')
 
   // Sizing Mode: 'bespoke' (tape) | 'standard' (EU sizing) | 'video_call' (assisted WhatsApp)
   const [sizingMode, setSizingMode] = useState<'bespoke' | 'standard' | 'video_call'>('bespoke')
@@ -242,14 +245,15 @@ function OrderFormContent() {
     }
   }, [refFromUrl])
 
-  async function applyReferralCode(codeToVerify: string) {
+  async function applyReferralCode(codeToVerify: string, contactOverride?: string) {
     const clean = codeToVerify.trim().toUpperCase()
     if (!clean) return
     setIsValidatingReferral(true)
     setReferralError(null)
 
     try {
-      const res = await validateReferralCodeAction(clean)
+      const contact = contactOverride || personalDetails.email || personalDetails.phone
+      const res = await validateReferralCodeAction(clean, contact)
       if (res.success && res.valid) {
         setActiveReferral({
           code: res.token || clean,
@@ -260,9 +264,11 @@ function OrderFormContent() {
         setReferralCodeInput(res.token || clean)
         setReferralError(null)
       } else {
+        setActiveReferral(null)
         setReferralError(res.error || 'Referral voucher is invalid or has expired.')
       }
     } catch {
+      setActiveReferral(null)
       setReferralError('Failed to validate referral code.')
     } finally {
       setIsValidatingReferral(false)
@@ -275,6 +281,7 @@ function OrderFormContent() {
   const calculatedTotalEUR = Math.max(0, activeDesign.priceEUR - discountEUR)
   const calculatedTotalNGN = Math.max(0, activeDesign.priceNGN - discountNGN)
   const depositDueEUR = Math.round(calculatedTotalEUR / 2)
+  const depositDueNGN = Math.round(calculatedTotalNGN / 2)
 
   // Sync selected specifications if design changes
   useEffect(() => {
@@ -287,11 +294,25 @@ function OrderFormContent() {
   }, [activeDesign])
 
   // Handle uploader
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
       setCustomFile(file)
       setCustomFilePreview(URL.createObjectURL(file))
+      setIsUploadingToCloudinary(true)
+
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const res = await uploadMediaAction(formData, 'customer-orders')
+        if (res.success && res.url) {
+          setCloudinaryUrl(res.url)
+        }
+      } catch (uploadErr) {
+        console.warn('Cloudinary upload error:', uploadErr)
+      } finally {
+        setIsUploadingToCloudinary(false)
+      }
     }
   }
 
@@ -396,6 +417,7 @@ function OrderFormContent() {
         depositAmount: paymentGateway === 'stripe' ? depositDueEUR : Math.round(calculatedTotalNGN / 2),
         paymentGateway,
         referralToken: activeReferral?.code,
+        customImageUrl: cloudinaryUrl || (customFilePreview?.startsWith('http') ? customFilePreview : undefined),
       })
 
       if (typeof window !== 'undefined') {
@@ -644,13 +666,27 @@ function OrderFormContent() {
                             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                           />
                           {customFilePreview ? (
-                            <div className="relative h-44 w-full rounded-xl overflow-hidden">
-                              <Image
-                                src={customFilePreview}
-                                alt="Custom Reference Upload"
-                                fill
-                                className="object-contain"
-                              />
+                            <div className="flex flex-col items-center gap-2">
+                              <div className="relative h-44 w-full rounded-xl overflow-hidden">
+                                <Image
+                                  src={customFilePreview}
+                                  alt="Custom Reference Upload"
+                                  fill
+                                  className="object-contain"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                {isUploadingToCloudinary ? (
+                                  <span className="text-[10px] text-[#C4975A] flex items-center gap-1.5 font-bold uppercase tracking-wider bg-brown-900/60 px-3 py-1 rounded-full border border-[#C4975A]/40">
+                                    <span className="w-2.5 h-2.5 border-2 border-[#C4975A] border-t-transparent rounded-full animate-spin" />
+                                    Uploading to Cloudinary Media Repository...
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-[#10B981] flex items-center gap-1.5 font-bold uppercase tracking-wider bg-[#10B981]/10 px-3 py-1 rounded-full border border-[#10B981]/30">
+                                    ✓ Cloudinary Media Repository Synced
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           ) : (
                             <div className="flex flex-col items-center gap-2">
@@ -1326,7 +1362,7 @@ function OrderFormContent() {
                           <span className="text-[10px] text-stone-400">50% balance after video sign-off</span>
                         </div>
                         <span className="font-serif text-2xl font-bold text-[#E8D4B0]">
-                          €{depositDueEUR}
+                          {paymentGateway === 'stripe' ? `€${depositDueEUR}` : `₦${depositDueNGN.toLocaleString('en-NG')}`}
                         </span>
                       </div>
                     </div>
@@ -1382,7 +1418,9 @@ function OrderFormContent() {
                           Processing 50% Deposit...
                         </span>
                       ) : (
-                        `Pay €${depositDueEUR} Deposit to Start Tailoring`
+                        paymentGateway === 'stripe'
+                          ? `Pay €${depositDueEUR} Deposit to Start Tailoring`
+                          : `Pay ₦${depositDueNGN.toLocaleString('en-NG')} Deposit to Start Tailoring`
                       )}
                     </Button>
                   </div>

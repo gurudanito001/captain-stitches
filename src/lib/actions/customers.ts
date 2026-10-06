@@ -6,6 +6,14 @@ import { DeliveryLocation, Language, Currency, MeasurementUnit } from '@prisma/c
 import type { CustomerProfile, MeasurementProfile, Location, Currency as OrderCurrency } from '@/data/adminOrdersData'
 import type { AdminCustomer } from '@/data/adminCustomersData'
 
+function safeRevalidatePath(path: string) {
+    try {
+        revalidatePath(path)
+    } catch {
+        // Ignore outside Next.js request context
+    }
+}
+
 export interface DbCustomerItem extends CustomerProfile {
     firstName: string
     lastName: string
@@ -103,6 +111,10 @@ export async function updateCustomerMeasurementAction(
         inseam: number
         neck: number
         length: number
+        bicep?: number
+        wrist?: number
+        trouserLength?: number
+        thigh?: number
         fitNotes?: string
     }
 ): Promise<{ success: boolean; updatedAt?: string; error?: string }> {
@@ -126,6 +138,10 @@ export async function updateCustomerMeasurementAction(
                 inseam: Number(measurements.inseam) || null,
                 neck: Number(measurements.neck) || null,
                 length: Number(measurements.length) || null,
+                bicep: measurements.bicep != null ? Number(measurements.bicep) : undefined,
+                wrist: measurements.wrist != null ? Number(measurements.wrist) : undefined,
+                trouserLength: measurements.trouserLength != null ? Number(measurements.trouserLength) : undefined,
+                thigh: measurements.thigh != null ? Number(measurements.thigh) : undefined,
                 fitNotes: measurements.fitNotes || '',
                 measuredAt: now,
                 updatedAt: now,
@@ -141,15 +157,19 @@ export async function updateCustomerMeasurementAction(
                 inseam: Number(measurements.inseam) || null,
                 neck: Number(measurements.neck) || null,
                 length: Number(measurements.length) || null,
+                bicep: measurements.bicep != null ? Number(measurements.bicep) : null,
+                wrist: measurements.wrist != null ? Number(measurements.wrist) : null,
+                trouserLength: measurements.trouserLength != null ? Number(measurements.trouserLength) : null,
+                thigh: measurements.thigh != null ? Number(measurements.thigh) : null,
                 fitNotes: measurements.fitNotes || '',
                 measuredAt: now,
             },
         })
 
-        revalidatePath('/admin/orders/new')
-        revalidatePath('/admin/orders')
-        revalidatePath('/admin/customers')
-        revalidatePath(`/admin/customers/${customerId}`)
+        safeRevalidatePath('/admin/orders/new')
+        safeRevalidatePath('/admin/orders')
+        safeRevalidatePath('/admin/customers')
+        safeRevalidatePath(`/admin/customers/${customerId}`)
 
         return { success: true, updatedAt: saved.updatedAt.toISOString() }
     } catch (err: any) {
@@ -256,8 +276,8 @@ export async function createCustomerAction(payload: CreateCustomerPayload): Prom
             updatedAt: created.measurements?.updatedAt ? created.measurements.updatedAt.toISOString() : undefined,
         }
 
-        revalidatePath('/admin/orders/new')
-        revalidatePath('/admin/customers')
+        safeRevalidatePath('/admin/orders/new')
+        safeRevalidatePath('/admin/customers')
 
         return {
             success: true,
@@ -283,6 +303,16 @@ export async function createCustomerAction(payload: CreateCustomerPayload): Prom
         }
     } catch (err: any) {
         console.error('Error creating customer:', err)
+        if (err?.code === 'P2002') {
+            const target = err.meta?.target
+            if (Array.isArray(target) && target.includes('phone')) {
+                return { success: false, error: 'A customer with this phone number is already registered.' }
+            }
+            if (Array.isArray(target) && target.includes('email')) {
+                return { success: false, error: 'A customer with this email address is already registered.' }
+            }
+            return { success: false, error: 'A customer with this phone number or email already exists.' }
+        }
         return { success: false, error: err.message || 'Failed to create customer' }
     }
 }
@@ -433,6 +463,10 @@ function formatPrismaCustomerToAdminCustomer(c: any, index: number = 0): AdminCu
             inseam: toCm(meas?.inseam, 80),
             neck: toCm(meas?.neck, 40),
             length: toCm(meas?.length, 105),
+            bicep: meas?.bicep != null ? toCm(meas.bicep, 36) : undefined,
+            wrist: meas?.wrist != null ? toCm(meas.wrist, 18) : undefined,
+            trouserLength: meas?.trouserLength != null ? toCm(meas.trouserLength, 104) : undefined,
+            thigh: meas?.thigh != null ? toCm(meas.thigh, 60) : undefined,
             fitNotes: meas?.fitNotes || '',
             lastUpdated: meas?.updatedAt
                 ? meas.updatedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -569,13 +603,43 @@ export async function updateCustomerPersonalAction(
         const preferredLang = data.language === 'IT' ? Language.IT : Language.EN
         const preferredCurrency = data.currency === 'EUR' ? Currency.EUR : Currency.NGN
 
+        const cleanPhone = data.phone.trim()
+        const existingPhone = await prisma.customer.findFirst({
+            where: {
+                phone: cleanPhone,
+                id: { not: customerId },
+            },
+        })
+        if (existingPhone) {
+            return {
+                success: false,
+                error: `Phone number is already associated with customer "${existingPhone.firstName} ${existingPhone.lastName}".`,
+            }
+        }
+
+        if (data.email?.trim()) {
+            const cleanEmail = data.email.trim()
+            const existingEmail = await prisma.customer.findFirst({
+                where: {
+                    email: { equals: cleanEmail, mode: 'insensitive' },
+                    id: { not: customerId },
+                },
+            })
+            if (existingEmail) {
+                return {
+                    success: false,
+                    error: `Email address is already associated with customer "${existingEmail.firstName} ${existingEmail.lastName}".`,
+                }
+            }
+        }
+
         await prisma.customer.update({
             where: { id: customerId },
             data: {
                 firstName,
                 lastName,
-                phone: data.phone.trim(),
-                whatsapp: data.whatsapp?.trim() || data.phone.trim(),
+                phone: cleanPhone,
+                whatsapp: data.whatsapp?.trim() || cleanPhone,
                 email: data.email?.trim() || null,
                 deliveryLocation,
                 deliveryAddress: data.address?.trim() || '',
@@ -584,11 +648,11 @@ export async function updateCustomerPersonalAction(
             },
         })
 
-        revalidatePath('/admin/customers')
-        revalidatePath(`/admin/customers/${customerId}`)
-        revalidatePath(`/admin/customers/${customerId}/edit`)
-        revalidatePath('/admin/orders')
-        revalidatePath('/admin/orders/new')
+        safeRevalidatePath('/admin/customers')
+        safeRevalidatePath(`/admin/customers/${customerId}`)
+        safeRevalidatePath(`/admin/customers/${customerId}/edit`)
+        safeRevalidatePath('/admin/orders')
+        safeRevalidatePath('/admin/orders/new')
 
         return { success: true }
     } catch (err: any) {
@@ -629,8 +693,8 @@ export async function addCustomerAdminNoteAction(
             data: { adminNotes: updatedNotes },
         })
 
-        revalidatePath(`/admin/customers/${customerId}`)
-        revalidatePath(`/admin/customers/${customerId}/edit`)
+        safeRevalidatePath(`/admin/customers/${customerId}`)
+        safeRevalidatePath(`/admin/customers/${customerId}/edit`)
 
         return { success: true }
     } catch (err: any) {
@@ -648,32 +712,34 @@ export async function deleteCustomerAdminAction(
     try {
         if (!customerId) return { success: false, error: 'Customer ID is required' }
 
-        await prisma.$transaction(async (tx) => {
-            // Delete reviews
-            await tx.review.deleteMany({ where: { customerId } })
-            // Delete referrals
-            await tx.referral.deleteMany({
-                where: { OR: [{ referrerId: customerId }, { referredCustomerId: customerId }] },
-            })
-            // Delete subscriber profile
-            await tx.subscriber.deleteMany({ where: { customerId } })
-            // Delete measurements
-            await tx.measurement.deleteMany({ where: { customerId } })
-            // Delete orders and related events / payments / notifications
-            const orders = await tx.order.findMany({ where: { customerId }, select: { id: true } })
-            for (const order of orders) {
-                await tx.orderTimelineEvent.deleteMany({ where: { orderId: order.id } })
-                await tx.payment.deleteMany({ where: { orderId: order.id } })
-                await tx.orderNotification.deleteMany({ where: { orderId: order.id } })
-                await tx.referral.updateMany({ where: { convertedOrderId: order.id }, data: { convertedOrderId: null } })
+        const orderCount = await prisma.order.count({ where: { customerId } })
+        if (orderCount > 0) {
+            return {
+                success: false,
+                error: 'Cannot delete customer with past or active order records. Financial records must be preserved.',
             }
-            await tx.order.deleteMany({ where: { customerId } })
-            // Delete customer
-            await tx.customer.delete({ where: { id: customerId } })
-        })
+        }
 
-        revalidatePath('/admin/customers')
-        revalidatePath('/admin/orders')
+        await prisma.$transaction(
+            async (tx) => {
+                // Delete reviews
+                await tx.review.deleteMany({ where: { customerId } })
+                // Delete referrals
+                await tx.referral.deleteMany({
+                    where: { OR: [{ referrerId: customerId }, { referredCustomerId: customerId }] },
+                })
+                // Delete subscriber profile
+                await tx.subscriber.deleteMany({ where: { customerId } })
+                // Delete measurements
+                await tx.measurement.deleteMany({ where: { customerId } })
+                // Delete customer
+                await tx.customer.delete({ where: { id: customerId } })
+            },
+            { timeout: 15000, maxWait: 10000 }
+        )
+
+        safeRevalidatePath('/admin/customers')
+        safeRevalidatePath('/admin/orders')
 
         return { success: true }
     } catch (err: any) {
@@ -718,7 +784,7 @@ export async function toggleCustomerEmailSubAction(
             },
         })
 
-        revalidatePath(`/admin/customers/${customerId}`)
+        safeRevalidatePath(`/admin/customers/${customerId}`)
         return { success: true }
     } catch (err: any) {
         console.error('Error toggling email subscription:', err)
@@ -772,8 +838,8 @@ export async function mergeCustomerAdminAction(
             await tx.customer.delete({ where: { id: sourceCustomerId } })
         })
 
-        revalidatePath('/admin/customers')
-        revalidatePath(`/admin/customers/${targetCustomerId}`)
+        safeRevalidatePath('/admin/customers')
+        safeRevalidatePath(`/admin/customers/${targetCustomerId}`)
         return { success: true }
     } catch (err: any) {
         console.error('Error merging customers:', err)

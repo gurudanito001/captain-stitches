@@ -20,6 +20,14 @@ import {
 import type { CatalogueCategory, CatalogueDesign } from '@/data/adminCatalogueData'
 import { parseColour } from '@/lib/utils/colours'
 
+function safeRevalidatePath(path: string) {
+    try {
+        revalidatePath(path)
+    } catch {
+        // Ignore outside Next.js request context
+    }
+}
+
 export interface CreateDesignActionPayload {
     slug?: string
     sku?: string
@@ -59,11 +67,14 @@ export async function createDesignAction(payload: CreateDesignActionPayload) {
         if (!payload.nameEN || !payload.nameEN.trim()) {
             return { success: false, error: 'English design title is required.' }
         }
-        if (!payload.priceNGN || payload.priceNGN <= 0) {
-            return { success: false, error: 'A valid NGN price is required.' }
+        if (payload.priceNGN === undefined || payload.priceNGN === null || payload.priceNGN <= 0) {
+            return { success: false, error: 'Price must be greater than zero.' }
         }
-        if (!payload.priceEUR || payload.priceEUR <= 0) {
-            return { success: false, error: 'A valid EUR price is required.' }
+        if (payload.priceEUR === undefined || payload.priceEUR === null || payload.priceEUR <= 0) {
+            return { success: false, error: 'Price must be greater than zero.' }
+        }
+        if (!payload.photos || payload.photos.length === 0) {
+            return { success: false, error: 'Please upload at least one primary garment photo before publishing.' }
         }
 
         const input: CreateDesignInput = {
@@ -95,9 +106,9 @@ export async function createDesignAction(payload: CreateDesignActionPayload) {
         const created = await createDesignInDb(input)
 
         // Revalidate storefront and admin paths
-        revalidatePath('/catalogue')
-        revalidatePath('/admin/catalogue')
-        revalidatePath('/')
+        safeRevalidatePath('/catalogue')
+        safeRevalidatePath('/admin/catalogue')
+        safeRevalidatePath('/')
 
         return {
             success: true,
@@ -128,11 +139,11 @@ export async function updateDesignAction(id: string, payload: Partial<CreateDesi
 
         const updated = await updateDesignInDb(id, updateData)
 
-        revalidatePath('/catalogue')
-        revalidatePath(`/catalogue/${updated.slug}`)
-        revalidatePath('/admin/catalogue')
-        revalidatePath(`/admin/catalogue/${id}`)
-        revalidatePath('/')
+        safeRevalidatePath('/catalogue')
+        safeRevalidatePath(`/catalogue/${updated.slug}`)
+        safeRevalidatePath('/admin/catalogue')
+        safeRevalidatePath(`/admin/catalogue/${id}`)
+        safeRevalidatePath('/')
 
         return {
             success: true,
@@ -153,13 +164,14 @@ export async function updateDesignAction(id: string, payload: Partial<CreateDesi
  */
 export async function deleteDesignAction(id: string) {
     try {
-        await deleteDesignInDb(id)
+        const result = await deleteDesignInDb(id)
 
-        revalidatePath('/catalogue')
-        revalidatePath('/admin/catalogue')
-        revalidatePath('/')
+        safeRevalidatePath('/catalogue')
+        safeRevalidatePath('/admin/catalogue')
+        safeRevalidatePath('/')
 
-        return { success: true }
+        const wasArchived = !result.isVisible
+        return { success: true, archived: wasArchived }
     } catch (err: any) {
         console.error('Error deleting design:', err)
         return {
@@ -176,9 +188,9 @@ export async function toggleDesignVisibilityAction(id: string, isVisible: boolea
     try {
         const updated = await toggleDesignVisibilityInDb(id, isVisible)
 
-        revalidatePath('/catalogue')
-        revalidatePath('/admin/catalogue')
-        revalidatePath('/')
+        safeRevalidatePath('/catalogue')
+        safeRevalidatePath('/admin/catalogue')
+        safeRevalidatePath('/')
 
         return { success: true, isVisible: updated.isVisible }
     } catch (err: any) {
@@ -197,9 +209,9 @@ export async function toggleDesignFeaturedAction(id: string, isFeatured: boolean
     try {
         const updated = await toggleDesignFeaturedInDb(id, isFeatured)
 
-        revalidatePath('/catalogue')
-        revalidatePath('/admin/catalogue')
-        revalidatePath('/')
+        safeRevalidatePath('/catalogue')
+        safeRevalidatePath('/admin/catalogue')
+        safeRevalidatePath('/')
 
         return { success: true, isFeatured: updated.isFeatured }
     } catch (err: any) {
@@ -218,9 +230,9 @@ export async function reorderDesignsAction(orderedIds: string[]) {
     try {
         await reorderDesignsInDb(orderedIds)
 
-        revalidatePath('/catalogue')
-        revalidatePath('/admin/catalogue')
-        revalidatePath('/')
+        safeRevalidatePath('/catalogue')
+        safeRevalidatePath('/admin/catalogue')
+        safeRevalidatePath('/')
 
         return { success: true }
     } catch (err: any) {

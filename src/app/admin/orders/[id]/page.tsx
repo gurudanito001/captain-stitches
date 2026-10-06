@@ -12,7 +12,12 @@ import {
     getAllOrders,
     updateOrder,
 } from '@/data/adminOrdersData'
-import { updateOrderStatusAdminAction } from '@/lib/actions/orders'
+import {
+    updateOrderStatusAdminAction,
+    getAllOrdersAdminAction,
+    uploadOrderInspectionMediaAction,
+} from '@/lib/actions/orders'
+import { uploadMediaAction } from '@/lib/actions/upload'
 import { parseColour } from '@/lib/utils/colours'
 
 // ─── Inline SVG Icons ──────────────────────────────────────────────────────────
@@ -61,16 +66,30 @@ export default function OrderDetailPage() {
     const [estimatedDelivery, setEstimatedDelivery] = useState('')
     const [inspectionNotes, setInspectionNotes] = useState('')
     const [toastMessage, setToastMessage] = useState<string | null>(null)
+    const [courierName, setCourierName] = useState('DHL Express')
+    const [trackingNumber, setTrackingNumber] = useState('')
+    const [isAlterationModalOpen, setIsAlterationModalOpen] = useState(false)
+    const [alterationNotes, setAlterationNotes] = useState('')
+    const [isUploadingMedia, setIsUploadingMedia] = useState(false)
 
     // Load order
     useEffect(() => {
-        const all = getAllOrders()
-        const found = all.find((o) => o.id === orderId || o.orderNumber.toLowerCase() === orderId.toLowerCase())
-        if (found) {
-            setOrder(found)
-            setEstimatedDelivery(found.details.estimatedDeliveryDate)
-            setInspectionNotes(found.inspection.notes)
+        const load = async () => {
+            const all = getAllOrders()
+            let found = all.find((o) => o.id === orderId || o.orderNumber.toLowerCase() === orderId.toLowerCase())
+            if (!found) {
+                const res = await getAllOrdersAdminAction().catch(() => null)
+                if (res && res.success && res.orders) {
+                    found = res.orders.find((o) => o.id === orderId || o.orderNumber.toLowerCase() === orderId.toLowerCase())
+                }
+            }
+            if (found) {
+                setOrder(found)
+                setEstimatedDelivery(found.details.estimatedDeliveryDate)
+                setInspectionNotes(found.inspection.notes)
+            }
         }
+        load()
     }, [orderId])
 
     const showToast = (msg: string) => {
@@ -107,6 +126,13 @@ export default function OrderDetailPage() {
     // Status change
     const handleStatusChange = (newStatus: OrderStatus) => {
         if (!order) return
+
+        // Quality gate check for DISPATCHED
+        if (newStatus === 'DISPATCHED' && order.status !== 'APPROVED' && !order.inspection.isApproved) {
+            showToast('⚠️ Order cannot be dispatched without Master Tailor inspection approval.')
+            return
+        }
+
         const updated: AdminOrder = {
             ...order,
             status: newStatus,
@@ -248,7 +274,115 @@ export default function OrderDetailPage() {
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('admin-counts-update'))
         }
-        updateOrderStatusAdminAction(order.id, 'APPROVED').catch(() => {})
+        updateOrderStatusAdminAction(order.id, 'APPROVED', { inspectionNotes }).catch(() => {})
+    }
+
+    // Request Alteration (Returns to IN_PRODUCTION)
+    const handleConfirmAlteration = () => {
+        if (!order) return
+        const note = alterationNotes.trim() || 'Alterations requested by Master Tailor Samuelson'
+        const updated: AdminOrder = {
+            ...order,
+            status: 'IN_PRODUCTION',
+            inspection: {
+                ...order.inspection,
+                isApproved: false,
+                notes: note,
+            },
+            notifications: [
+                {
+                    id: `notif-${Date.now()}`,
+                    event: 'Alterations Requested',
+                    channel: 'WhatsApp',
+                    timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    details: note,
+                },
+                ...order.notifications,
+            ],
+        }
+        updateOrder(updated)
+        setOrder(updated)
+        setIsAlterationModalOpen(false)
+        setAlterationNotes('')
+        showToast('Alterations requested. Order returned to In Production.')
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
+        updateOrderStatusAdminAction(order.id, 'IN_PRODUCTION', { notes: note }).catch(() => {})
+    }
+
+    // Dispatch Order with Courier Tracking
+    const handleDispatchOrder = async (carrier: string, tracking: string) => {
+        if (!order) return
+        if (order.status !== 'APPROVED' && !order.inspection.isApproved) {
+            showToast('⚠️ Order cannot be dispatched without Master Tailor inspection approval.')
+            return
+        }
+
+        const updated: AdminOrder = {
+            ...order,
+            status: 'DISPATCHED',
+            notifications: [
+                {
+                    id: `notif-${Date.now()}`,
+                    event: 'Order Dispatched',
+                    channel: 'WhatsApp',
+                    timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    details: `Package shipped via ${carrier}. Tracking: ${tracking}`,
+                },
+                ...order.notifications,
+            ],
+        }
+        updateOrder(updated)
+        setOrder(updated)
+        showToast(`Dispatched via ${carrier}! Tracking: ${tracking}`)
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
+
+        await updateOrderStatusAdminAction(order.id, 'DISPATCHED', {
+            courierName: carrier,
+            trackingNumber: tracking,
+            confirmUnpaidDispatch: true,
+        }).catch(console.error)
+    }
+
+    // Upload artisan inspection media directly to Cloudinary
+    const handleUploadInspectionMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return
+        const file = e.target.files[0]
+        setIsUploadingMedia(true)
+
+        try {
+            const formData = new FormData()
+            formData.append('file', file)
+            const res = await uploadMediaAction(formData, 'inspection-media')
+
+            if (res.success && res.url) {
+                const photoToAdd = res.url
+                const updated: AdminOrder = {
+                    ...order,
+                    inspection: {
+                        ...order.inspection,
+                        photos: [...order.inspection.photos, photoToAdd],
+                    },
+                }
+                updateOrder(updated)
+                setOrder(updated)
+                showToast(res.isSimulated ? 'Artisan photo uploaded (Cloudinary simulated)' : 'Artisan photo uploaded to Cloudinary')
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('admin-counts-update'))
+                }
+                uploadOrderInspectionMediaAction(order.id, [photoToAdd]).catch(() => {})
+            } else {
+                showToast(res.error || 'Failed to upload photo')
+            }
+        } catch {
+            showToast('Failed to upload image')
+        } finally {
+            setIsUploadingMedia(false)
+            e.target.value = ''
+        }
     }
 
     // Add sample inspection photo
@@ -267,6 +401,7 @@ export default function OrderDetailPage() {
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('admin-counts-update'))
         }
+        uploadOrderInspectionMediaAction(order.id, [photoToAdd]).catch(() => {})
     }
 
     const currentStageMeta = STAGES_PIPELINE.find((s) => s.key === order.status) || STAGES_PIPELINE[0]
@@ -940,10 +1075,8 @@ export default function OrderDetailPage() {
                                     </div>
                                 )}
 
-                                {/* Upload button / drop area */}
-                                <button
-                                    type="button"
-                                    onClick={handleAddMockPhoto}
+                                {/* Functional Cloudinary Upload Button */}
+                                <label
                                     style={{
                                         width: '100px',
                                         height: '100px',
@@ -955,15 +1088,33 @@ export default function OrderDetailPage() {
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         gap: '0.35rem',
-                                        cursor: 'pointer',
+                                        cursor: isUploadingMedia ? 'wait' : 'pointer',
                                         fontSize: '0.725rem',
                                         color: '#8A7A6E',
                                         fontWeight: 600,
+                                        position: 'relative',
+                                        overflow: 'hidden',
                                     }}
                                 >
-                                    <IconUploadCloud />
-                                    <span>+ Add Media</span>
-                                </button>
+                                    <input
+                                        type="file"
+                                        accept="image/*,video/*"
+                                        disabled={isUploadingMedia}
+                                        onChange={handleUploadInspectionMedia}
+                                        style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+                                    />
+                                    {isUploadingMedia ? (
+                                        <>
+                                            <span style={{ width: '16px', height: '16px', border: '2px solid #C4975A', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                            <span style={{ fontSize: '0.65rem', color: '#C4975A' }}>Uploading...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <IconUploadCloud />
+                                            <span>+ Upload Media</span>
+                                        </>
+                                    )}
+                                </label>
                             </div>
                         </div>
 
@@ -1017,28 +1168,191 @@ export default function OrderDetailPage() {
                                 )}
                             </div>
 
-                            <button
-                                type="button"
-                                disabled={!hasMedia || order.inspection.isApproved}
-                                onClick={handleApproveInspection}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    disabled={!hasMedia || order.inspection.isApproved}
+                                    onClick={handleApproveInspection}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.45rem',
+                                        backgroundColor: hasMedia && !order.inspection.isApproved ? '#166534' : '#E0D7CB',
+                                        color: '#FFFFFF',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        padding: '0.625rem 1.25rem',
+                                        fontSize: '0.825rem',
+                                        fontWeight: 700,
+                                        cursor: hasMedia && !order.inspection.isApproved ? 'pointer' : 'not-allowed',
+                                        boxShadow: hasMedia && !order.inspection.isApproved ? '0 2px 6px rgba(22,101,52,0.25)' : 'none',
+                                    }}
+                                >
+                                    <IconShieldCheck />
+                                    <span>{order.inspection.isApproved ? 'Approved & Signed Off' : '✦ Approve Quality & Sign Off'}</span>
+                                </button>
+
+                                {order.status === 'INSPECTION' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAlterationModalOpen(true)}
+                                        style={{
+                                            padding: '0.625rem 1rem',
+                                            borderRadius: '8px',
+                                            border: '1px solid #DC2626',
+                                            backgroundColor: '#FEF2F2',
+                                            color: '#DC2626',
+                                            fontSize: '0.825rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        Request Alteration
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 4. Courier Shipping & Dispatch Card (TC-08.5) */}
+                    <div
+                        style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '16px',
+                            padding: '1.5rem',
+                            border: '1px solid #EDE8E1',
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '1rem',
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontSize: '1.1rem' }}>📦</span>
+                                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1C0F07', margin: 0 }}>
+                                    Courier Logistics & Dispatch
+                                </h3>
+                            </div>
+                            <span
                                 style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.45rem',
-                                    backgroundColor: hasMedia && !order.inspection.isApproved ? '#166534' : '#E0D7CB',
-                                    color: '#FFFFFF',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    padding: '0.625rem 1.25rem',
-                                    fontSize: '0.825rem',
+                                    fontSize: '0.75rem',
                                     fontWeight: 700,
-                                    cursor: hasMedia && !order.inspection.isApproved ? 'pointer' : 'not-allowed',
-                                    boxShadow: hasMedia && !order.inspection.isApproved ? '0 2px 6px rgba(22,101,52,0.25)' : 'none',
+                                    padding: '0.2rem 0.6rem',
+                                    borderRadius: '6px',
+                                    backgroundColor: order.status === 'DISPATCHED' || order.status === 'DELIVERED' ? '#DCFCE7' : '#F3EFE9',
+                                    color: order.status === 'DISPATCHED' || order.status === 'DELIVERED' ? '#166534' : '#8A7A6E',
                                 }}
                             >
-                                <IconShieldCheck />
-                                <span>{order.inspection.isApproved ? 'Approved & Signed Off' : 'Approve & Proceed to Dispatch'}</span>
-                            </button>
+                                {order.status === 'DISPATCHED' ? 'In Transit' : order.status === 'DELIVERED' ? 'Delivered' : 'Pending Dispatch'}
+                            </span>
+                        </div>
+
+                        {/* Balance due warning banner */}
+                        {order.payment.balanceStatus !== 'PAID' && order.payment.balanceAmount > 0 && (
+                            <div
+                                style={{
+                                    backgroundColor: '#FFFBEB',
+                                    border: '1px solid #FDE68A',
+                                    padding: '0.75rem 1rem',
+                                    borderRadius: '8px',
+                                    fontSize: '0.8rem',
+                                    color: '#92400E',
+                                }}
+                            >
+                                ⚠️ Outstanding balance: <strong>{order.details.currency === 'EUR' ? `€${order.payment.balanceAmount}` : `₦${order.payment.balanceAmount.toLocaleString()}`}</strong>
+                            </div>
+                        )}
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
+                                    Courier Carrier *
+                                </label>
+                                <select
+                                    value={courierName}
+                                    onChange={(e) => setCourierName(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.6rem 0.75rem',
+                                        borderRadius: '8px',
+                                        border: '1px solid #E0D7CB',
+                                        fontSize: '0.85rem',
+                                        backgroundColor: '#FAF7F2',
+                                    }}
+                                >
+                                    <option value="DHL Express">DHL Express (Global / Italy)</option>
+                                    <option value="Fez Delivery">Fez Delivery (Nigeria Domestic)</option>
+                                    <option value="GIG Logistics">GIG Logistics (Nigeria Regional)</option>
+                                    <option value="Verona Atelier Concierge">Verona Atelier Direct Handover</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.35rem' }}>
+                                    Courier Tracking Code *
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. DHL-IT-982341823"
+                                    value={trackingNumber}
+                                    onChange={(e) => setTrackingNumber(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.6rem 0.75rem',
+                                        borderRadius: '8px',
+                                        border: '1px solid #E0D7CB',
+                                        fontSize: '0.85rem',
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                            {order.status === 'APPROVED' && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!trackingNumber.trim()) {
+                                            showToast('Please enter a valid tracking number to dispatch.')
+                                            return
+                                        }
+                                        handleDispatchOrder(courierName, trackingNumber.trim())
+                                    }}
+                                    style={{
+                                        padding: '0.625rem 1.25rem',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        backgroundColor: '#1E40AF',
+                                        color: '#FFFFFF',
+                                        fontSize: '0.825rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 2px 6px rgba(30,64,175,0.25)',
+                                    }}
+                                >
+                                    🚀 Dispatch Order & Log Courier
+                                </button>
+                            )}
+
+                            {order.status === 'DISPATCHED' && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleStatusChange('DELIVERED')}
+                                    style={{
+                                        padding: '0.625rem 1.25rem',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        backgroundColor: '#166534',
+                                        color: '#FFFFFF',
+                                        fontSize: '0.825rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    ✓ Confirm Delivery Arrival (Delivered)
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1396,6 +1710,108 @@ export default function OrderDetailPage() {
                     </div>
                 </div>
             </div>
+
+            {/* ─── Alteration Request Modal (Edge Case 2) ───────────────────────── */}
+            {isAlterationModalOpen && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(28, 15, 7, 0.45)',
+                        backdropFilter: 'blur(3px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000,
+                        padding: '1rem',
+                    }}
+                >
+                    <div
+                        style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '16px',
+                            border: '1px solid #EDE8E1',
+                            padding: '1.75rem',
+                            maxWidth: '480px',
+                            width: '100%',
+                            boxShadow: '0 12px 32px rgba(0,0,0,0.15)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '1.25rem',
+                        }}
+                    >
+                        <div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#DC2626', textTransform: 'uppercase' }}>
+                                Quality Gate • Alteration Request
+                            </div>
+                            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1C0F07', margin: '0.25rem 0 0' }}>
+                                Request Workshop Alteration
+                            </h3>
+                            <p style={{ fontSize: '0.825rem', color: '#8A7A6E', margin: '0.35rem 0 0' }}>
+                                Garment will be sent back to <strong>In Production</strong> stage for tailor adjustments.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.4rem' }}>
+                                Alteration Instructions / Fit Notes *
+                            </label>
+                            <textarea
+                                value={alterationNotes}
+                                onChange={(e) => setAlterationNotes(e.target.value)}
+                                placeholder="e.g. Shorten sleeves by 1.5cm, align collar embroidery"
+                                rows={3}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.65rem 0.85rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #E0D7CB',
+                                    fontSize: '0.85rem',
+                                    color: '#1C0F07',
+                                    backgroundColor: '#FAF7F2',
+                                    outline: 'none',
+                                    resize: 'vertical',
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => setIsAlterationModalOpen(false)}
+                                style={{
+                                    padding: '0.55rem 1rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #E0D7CB',
+                                    backgroundColor: '#FAF7F2',
+                                    color: '#6E5D4F',
+                                    fontSize: '0.825rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmAlteration}
+                                style={{
+                                    padding: '0.55rem 1.25rem',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: '#DC2626',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.825rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Submit Alteration Request
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

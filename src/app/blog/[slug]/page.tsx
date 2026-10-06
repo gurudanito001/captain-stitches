@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { Navbar } from '@/components/layout/Navbar'
 import { Footer } from '@/components/layout/Footer'
 import { Button } from '@/components/ui/Button'
-import { BLOG_POSTS } from '@/utils/blogData'
+import { BLOG_POSTS, BlogPost } from '@/utils/blogData'
+import { getAllBlogPosts } from '@/data/adminBlogData'
 
 export default function BlogPostDetailPage({
   params,
@@ -15,15 +16,38 @@ export default function BlogPostDetailPage({
 }) {
   const { slug } = use(params)
 
-  // Find active blog post
-  const post = useMemo(() => {
-    return BLOG_POSTS.find(p => p.slug === slug)
+  // Find active blog post (respecting published status unless in preview mode)
+  const post = useMemo<BlogPost | null>(() => {
+    // 1. Check admin posts first
+    const adminPosts = getAllBlogPosts()
+    const adminMatch = adminPosts.find((p) => p.slug === slug)
+    if (adminMatch) {
+      const isPreview = typeof window !== 'undefined' && window.location.search.includes('preview=true')
+      if (adminMatch.status !== 'published' && !isPreview) {
+        return null // Unpublished drafts return 404 to public visitors
+      }
+      return {
+        title: adminMatch.contentEN.title,
+        category: adminMatch.category,
+        date: adminMatch.publishDate !== 'Draft' ? adminMatch.publishDate : 'Draft Preview',
+        readTime: `${Math.max(1, Math.ceil(adminMatch.contentEN.body.split(/\s+/).length / 200))} min read`,
+        excerpt: adminMatch.contentEN.excerpt,
+        slug: adminMatch.slug,
+        image: adminMatch.featuredImage || '/images/blog-bespoke.jpg',
+        tags: adminMatch.contentEN.tags,
+        content: adminMatch.contentEN.body.split('\n\n').filter(Boolean),
+      }
+    }
+
+    // 2. Check static BLOG_POSTS
+    const staticMatch = BLOG_POSTS.find((p) => p.slug === slug)
+    return staticMatch || null
   }, [slug])
 
   // Find related posts (excluding current one)
   const relatedPosts = useMemo(() => {
     if (!post) return []
-    return BLOG_POSTS.filter(p => p.slug !== slug).slice(0, 3)
+    return BLOG_POSTS.filter((p) => p.slug !== slug).slice(0, 3)
   }, [post, slug])
 
   if (!post) {

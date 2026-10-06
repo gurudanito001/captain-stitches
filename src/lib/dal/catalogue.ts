@@ -1,4 +1,3 @@
-import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/prisma'
 import { DesignCategory, ReviewStatus } from '@prisma/client'
@@ -298,7 +297,7 @@ export async function createDesignInDb(data: CreateDesignInput) {
     if (!baseSlug) baseSlug = `design-${Date.now()}`
 
     let uniqueSlug = baseSlug
-    let counter = 1
+    let counter = 2
     while (await prisma.design.findUnique({ where: { slug: uniqueSlug } })) {
         uniqueSlug = `${baseSlug}-${counter}`
         counter++
@@ -406,6 +405,15 @@ export async function updateDesignInDb(id: string, data: Partial<CreateDesignInp
  */
 export async function deleteDesignInDb(id: string) {
     const realId = await resolveDesignId(id)
+    const orderCount = await prisma.order.count({ where: { designId: realId } })
+    if (orderCount > 0) {
+        // Safe constraint prevents hard cascade delete; auto switch isVisible: false to preserve order receipts
+        return prisma.design.update({
+            where: { id: realId },
+            data: { isVisible: false },
+        })
+    }
+    await prisma.designPhoto.deleteMany({ where: { designId: realId } })
     return prisma.design.delete({
         where: { id: realId },
     })

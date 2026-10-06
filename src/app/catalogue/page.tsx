@@ -13,7 +13,12 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic'
 
 export default async function CataloguePage() {
-  const dbDesigns = await getPublishedDesigns()
+  let dbDesigns: any[] = []
+  try {
+    dbDesigns = await getPublishedDesigns()
+  } catch (err: any) {
+    console.error('[CataloguePage] getPublishedDesigns error:', err)
+  }
 
   const designs: PublicCatalogueItem[] = dbDesigns.map((d: any) => {
     const coverPhoto = d.photos.find((p: any) => p.isPrimary)?.url || d.photos[0]?.url || '/images/design-agbada.jpg'

@@ -108,26 +108,150 @@ export const INITIAL_BLOG_SETTINGS: BlogGlobalSettings = {
     },
 }
 
-export const INITIAL_BLOG_POSTS: AdminBlogPost[] = []
+export const INITIAL_BLOG_POSTS: AdminBlogPost[] = [
+    {
+        id: 'post-modern-agbada-europe',
+        slug: 'the-modern-agbada-in-europe',
+        featuredImage: '/images/blog-bespoke.jpg',
+        featuredImageAlt: 'Modern Agbada styling for European weddings',
+        category: 'Style Guide',
+        status: 'published',
+        publishDate: 'Jun 5, 2026',
+        publishTime: '10:00',
+        author: 'Samuelson',
+        visibility: 'public',
+        contentEN: {
+            title: "The Modern Agbada in Europe: A Gentleman's Guide to Diaspora Weddings",
+            excerpt: "Discover how to style traditional Nigerian Agbada in Italy and Europe with bespoke cashmere tailoring by CaptainStitches.",
+            body: `In the realm of traditional Nigerian fashion, fit is not just a preference — it is the entire statement. Whether it is a grand Agbada, a sleek Senator set, or a Kaftan, these garments are culturally designed to drape, flow, and align precisely with the wearer’s body.
+
+## The European Diaspora Context
+Wearing an Agbada in Rome, Milan, or Verona carries immense cultural pride. However, European climates and architectural settings demand thoughtful adaptations in fabric choice and tailoring cut. Traditional heavy jacquards can overheat in indoor Mediterranean ballrooms, which is why our Verona atelier crafts modern Agbadas from breathable high-twist Italian wool and refined cashmere-cottons.
+
+> "A bespoke Agbada must command the room without restricting the gentleman wearing it. Seam balance across the shoulders determines whether the cloth flies or drapes." — Master Tailor Samuelson
+
+## 3 Sartorial Rules for European Ceremonies
+1. **Shoulder Finish:** Ensure the winged drape falls cleanly at wrist-point when hands are at rest.
+2. **Inner Buba Collar:** Choose a tailored Nehru or embroidered split-mandarin neckline that sits flush without bunching under the outer cloak.
+3. **Footwear Harmony:** Pair with bespoke velvet slippers or hand-burnished Italian monk-strap shoes.
+
+Ready to craft your bespoke wedding piece? Explore our collection or book a commission.`,
+            tags: ['Agbada', 'Bespoke', 'Diaspora Wedding', 'Style Guide', 'Italy'],
+            metaTitle: 'Bespoke Agbada Tailor in Italy | CaptainStitches',
+            metaDescription: 'Discover how to style traditional Nigerian Agbada in Italy and Europe with bespoke cashmere tailoring by CaptainStitches.',
+        },
+        contentIT: {
+            title: "L'Agbada Moderno in Europa: Guida di Stile per Matrimoni ed Eventi",
+            excerpt: "Scopri come indossare l'Agbada tradizionale nigeriano in Italia ed Europa con la sartoria su misura di CaptainStitches.",
+            body: `Nell'ambito della moda tradizionale nigeriana, la vestibilità non è una semplice preferenza: è l'intera dichiarazione sartoriale. Che si tratti di un maestoso Agbada o di un completo Senator, questi capi sono culturalmente disegnati per drappeggiare ed esaltare la figura.
+
+La nostra sartoria a Verona reinterpreta l'Agbada utilizzando pregiate lane italiane e sete traspiranti, perfette per matrimoni e cerimonie in tutta Europa.`,
+            tags: ['Agbada', 'Su Misura', 'Matrimonio Diaspora', 'Guida di Stile', 'Italia'],
+            metaTitle: 'Sarto Agbada su Misura in Italia | CaptainStitches',
+            metaDescription: "Scopri come indossare l'Agbada tradizionale nigeriano in Italia ed Europa con la sartoria su misura di CaptainStitches.",
+        },
+        cta: {
+            isEnabled: true,
+            text: 'Ready to craft your bespoke wedding piece? Explore our collection or book a commission.',
+            linkType: 'order',
+            customUrl: '/order',
+        },
+        stats: {
+            views: 450,
+            uniqueVisitors: 380,
+            avgTimeOnPage: '5m',
+            bounceRate: '24%',
+            monthlyViews: 450,
+            previousMonthViews: 310,
+            ctaClicks: 62,
+            orderConversions: 14,
+            subscribersGained: 28,
+            trafficSources: { direct: 35, whatsapp: 30, instagram: 20, google: 10, other: 5 },
+            languageSplit: { en: 70, it: 30 },
+            searchKeywords: [{ keyword: 'bespoke agbada italy', clicks: 24, position: 2 }],
+        },
+        lastSaved: 'Jun 5, 2026',
+    },
+    {
+        id: 'post-bespoke-vs-ready',
+        slug: 'bespoke-vs-ready-to-wear',
+        featuredImage: '/images/blog-bespoke.jpg',
+        featuredImageAlt: 'Why bespoke beats ready-to-wear native attires',
+        category: 'Style Guide',
+        status: 'published',
+        publishDate: 'Jun 1, 2026',
+        publishTime: '09:00',
+        author: 'Samuelson',
+        visibility: 'public',
+        contentEN: {
+            title: 'Why Bespoke Beats Ready-to-Wear for Nigerian Occasions',
+            excerpt: "There's a reason every agbada you admire at a wedding was made to order. We explain why off-the-rack will never match the real thing.",
+            body: `In the realm of traditional Nigerian fashion, fit is not just a preference — it is the entire statement. Whether it is a grand Agbada, a sleek Senator set, or a Kaftan, these garments are culturally designed to drape, flow, and align precisely with the wearer’s body.
+
+Ready-to-wear clothes are engineered to represent averages. But African bodies, and particularly the posture required to carry traditional attires, are unique. When you choose bespoke tailoring through CaptainStitches, every seam is designed around your physical profile.`,
+            tags: ['Agbada', 'Bespoke', 'Traditional Wedding', 'Fashion Guide'],
+            metaTitle: 'Why Bespoke Beats Ready-to-Wear | CaptainStitches',
+            metaDescription: 'Discover why bespoke tailoring outshines off-the-rack fashion for African traditional occasions.',
+        },
+        contentIT: {
+            title: 'Perché il Su Misura Supera il Pret-a-Porter per le Cerimonie Africane',
+            excerpt: "Ogni capo ammirato a un matrimonio è realizzato su misura. Ecco perché il pret-a-porter non può competere.",
+            body: `La moda tradizionale richiede precisione millimetrica. Scopri i vantaggi del taglio sartoriale rispetto alle taglie standard.`,
+            tags: ['Su Misura', 'Sartoria', 'Stile'],
+            metaTitle: 'Su Misura vs Pret-a-Porter | CaptainStitches',
+            metaDescription: 'I vantaggi della sartoria tradizionale africana su misura.',
+        },
+        cta: {
+            isEnabled: true,
+            text: 'Ready to commission your next bespoke piece? Browse the curated atelier collection →',
+            linkType: 'catalogue',
+            customUrl: '/catalogue',
+        },
+        stats: {
+            views: 310,
+            uniqueVisitors: 260,
+            avgTimeOnPage: '4m',
+            bounceRate: '28%',
+            monthlyViews: 310,
+            previousMonthViews: 190,
+            ctaClicks: 41,
+            orderConversions: 8,
+            subscribersGained: 15,
+            trafficSources: { direct: 40, whatsapp: 35, instagram: 15, google: 10, other: 0 },
+            languageSplit: { en: 80, it: 20 },
+            searchKeywords: [],
+        },
+        lastSaved: 'Jun 1, 2026',
+    },
+]
 
 const STORAGE_KEY_POSTS = 'cs_admin_blog_posts_v2'
 const STORAGE_KEY_SETTINGS = 'cs_admin_blog_settings_v2'
 
+let inMemoryPosts: AdminBlogPost[] = [...INITIAL_BLOG_POSTS]
+let inMemorySettings: BlogGlobalSettings = { ...INITIAL_BLOG_SETTINGS }
+
 export function getAllBlogPosts(): AdminBlogPost[] {
-    if (typeof window === 'undefined') return INITIAL_BLOG_POSTS
+    if (typeof window === 'undefined') return inMemoryPosts
     try {
         const stored = localStorage.getItem(STORAGE_KEY_POSTS)
         if (!stored) {
             localStorage.setItem(STORAGE_KEY_POSTS, JSON.stringify(INITIAL_BLOG_POSTS))
             return INITIAL_BLOG_POSTS
         }
-        return JSON.parse(stored)
+        const parsed = JSON.parse(stored)
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            localStorage.setItem(STORAGE_KEY_POSTS, JSON.stringify(INITIAL_BLOG_POSTS))
+            return INITIAL_BLOG_POSTS
+        }
+        return parsed
     } catch {
-        return INITIAL_BLOG_POSTS
+        return inMemoryPosts
     }
 }
 
 export function saveAllBlogPosts(posts: AdminBlogPost[]): void {
+    inMemoryPosts = [...posts]
     if (typeof window === 'undefined') return
     try {
         localStorage.setItem(STORAGE_KEY_POSTS, JSON.stringify(posts))
@@ -214,20 +338,21 @@ export function duplicateBlogPost(id: string): AdminBlogPost | null {
 }
 
 export function getBlogSettings(): BlogGlobalSettings {
-    if (typeof window === 'undefined') return INITIAL_BLOG_SETTINGS
+    if (typeof window === 'undefined') return inMemorySettings
     try {
         const stored = localStorage.getItem(STORAGE_KEY_SETTINGS)
         if (!stored) {
-            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(INITIAL_BLOG_SETTINGS))
-            return INITIAL_BLOG_SETTINGS
+            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(inMemorySettings))
+            return inMemorySettings
         }
         return JSON.parse(stored)
     } catch {
-        return INITIAL_BLOG_SETTINGS
+        return inMemorySettings
     }
 }
 
 export function saveBlogSettings(settings: BlogGlobalSettings): void {
+    inMemorySettings = { ...settings }
     if (typeof window === 'undefined') return
     try {
         localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings))

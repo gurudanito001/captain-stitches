@@ -9,6 +9,10 @@ export interface CustomerMeasurementsCm {
     inseam: number
     neck: number
     length: number
+    bicep?: number
+    wrist?: number
+    trouserLength?: number
+    thigh?: number
     fitNotes?: string
     lastUpdated: string
 }

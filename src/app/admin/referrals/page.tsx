@@ -13,7 +13,10 @@ import {
     INITIAL_ACTIVITY_FEED,
     ReferralActivityEvent,
 } from '@/data/adminReferralsData'
-import { getAllReferralsAdminAction } from '@/lib/actions/referrals'
+import {
+    getAllReferralsAdminAction,
+    toggleProgrammeStatusAdminAction,
+} from '@/lib/actions/referrals'
 
 type ChartMetric = 'conversions' | 'visits' | 'rewards'
 type ChartRange = '30days' | '3months' | '6months' | 'all'
@@ -46,9 +49,14 @@ export default function AdminReferralsOverviewPage() {
         setTimeout(() => setToastMessage(null), 3200)
     }
 
-    const handleToggleStatus = () => {
+    const handleToggleStatus = async () => {
         const isNowEnabled = toggleProgrammeStatus()
         setConfig((prev) => ({ ...prev, isEnabled: isNowEnabled }))
+        try {
+            await toggleProgrammeStatusAdminAction(isNowEnabled)
+        } catch (e) {
+            console.warn('Server toggle failed:', e)
+        }
         showToast(
             isNowEnabled
                 ? 'Referral Programme has been Activated.'

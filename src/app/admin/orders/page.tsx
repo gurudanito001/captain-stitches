@@ -59,6 +59,14 @@ function AdminOrdersBoardContent() {
     const [overdueOnly, setOverdueOnly] = useState(false)
     const [draggedOrderId, setDraggedOrderId] = useState<string | null>(null)
     const [dragOverColumn, setDragOverColumn] = useState<OrderStatus | null>(null)
+    const [tailorModalOrder, setTailorModalOrder] = useState<AdminOrder | null>(null)
+    const [selectedTailorForModal, setSelectedTailorForModal] = useState<string>(TAILORS_ROSTER[0]?.name || 'Master Tailor Samuelson')
+    const [boardToast, setBoardToast] = useState<string | null>(null)
+
+    const showBoardToast = (msg: string) => {
+        setBoardToast(msg)
+        setTimeout(() => setBoardToast(null), 3500)
+    }
 
     // Sync URL stage query to stageFilter
     useEffect(() => {
@@ -170,14 +178,62 @@ function AdminOrdersBoardContent() {
         setDragOverColumn(null)
         setDraggedOrderId(null)
 
-        if (orderId) {
-            updateOrderStatus(orderId, newStage)
-            setOrders(getAllOrders())
-            await updateOrderStatusAdminAction(orderId, newStage).catch(console.error)
-            if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('admin-counts-update'))
-            }
+        if (!orderId) return
+
+        const currentOrder = orders.find((o) => o.id === orderId || o.orderNumber === orderId)
+        if (!currentOrder) return
+
+        // 1. Mandatory Quality Gate Check for DISPATCHED
+        if (newStage === 'DISPATCHED' && currentOrder.status !== 'APPROVED' && !currentOrder.inspection?.isApproved) {
+            showBoardToast('⚠️ Order cannot be dispatched without Master Tailor inspection approval.')
+            return
         }
+
+        // 2. Tailor Assignment Gate for IN_PRODUCTION
+        if (newStage === 'IN_PRODUCTION' && (currentOrder.status === 'CONFIRMED' || currentOrder.status === 'NEW')) {
+            setTailorModalOrder(currentOrder)
+            return
+        }
+
+        // Advance stage
+        updateOrderStatus(currentOrder.id, newStage)
+        setOrders(getAllOrders())
+        const res = await updateOrderStatusAdminAction(currentOrder.id, newStage).catch((err) => ({
+            success: false,
+            error: err.message,
+        }))
+        if (res && !res.success && res.error) {
+            showBoardToast(`⚠️ ${res.error}`)
+            setOrders(getAllOrders())
+        }
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
+    }
+
+    const handleConfirmTailorAssignment = async () => {
+        if (!tailorModalOrder) return
+        const orderId = tailorModalOrder.id
+        const tailor = selectedTailorForModal
+
+        updateOrderStatus(orderId, 'IN_PRODUCTION')
+        const all = getAllOrders()
+        const target = all.find((o) => o.id === orderId)
+        if (target) {
+            target.tailorAssigned = tailor
+        }
+        setOrders(all)
+        setTailorModalOrder(null)
+
+        await updateOrderStatusAdminAction(orderId, 'IN_PRODUCTION', {
+            tailorAssigned: tailor,
+            notes: `Tailor assigned: ${tailor}. Fabric cut and stitching commenced.`,
+        }).catch(console.error)
+
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
+        showBoardToast(`Cutting commenced! Tailor assigned: ${tailor}`)
     }
 
     const activeCount = orders.filter((o) => o.status !== 'DELIVERED').length
@@ -957,6 +1013,135 @@ function AdminOrdersBoardContent() {
                             })}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {/* ─── Tailor Assignment Modal (TC-08.2) ───────────────────────────── */}
+            {tailorModalOrder && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(28, 15, 7, 0.45)',
+                        backdropFilter: 'blur(3px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000,
+                        padding: '1rem',
+                    }}
+                >
+                    <div
+                        style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '16px',
+                            border: '1px solid #EDE8E1',
+                            padding: '1.75rem',
+                            maxWidth: '480px',
+                            width: '100%',
+                            boxShadow: '0 12px 32px rgba(0,0,0,0.15)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '1.25rem',
+                        }}
+                    >
+                        <div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#C4975A', textTransform: 'uppercase' }}>
+                                Workshop Assignment • Stage 3
+                            </div>
+                            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1C0F07', margin: '0.25rem 0 0' }}>
+                                Assign Tailor for Cutting
+                            </h3>
+                            <p style={{ fontSize: '0.825rem', color: '#8A7A6E', margin: '0.35rem 0 0' }}>
+                                Moving <strong>{tailorModalOrder.orderNumber}</strong> ({tailorModalOrder.design.name}) to active production. Select the responsible master cutter.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#6E5D4F', marginBottom: '0.4rem' }}>
+                                Assigned Artisan / Master Tailor *
+                            </label>
+                            <select
+                                value={selectedTailorForModal}
+                                onChange={(e) => setSelectedTailorForModal(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.65rem 0.85rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #E0D7CB',
+                                    fontSize: '0.875rem',
+                                    color: '#1C0F07',
+                                    backgroundColor: '#FAF7F2',
+                                    outline: 'none',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                {TAILORS_ROSTER.map((t) => (
+                                    <option key={t.id} value={t.name}>
+                                        {t.name} ({t.role})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => setTailorModalOrder(null)}
+                                style={{
+                                    padding: '0.55rem 1rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #E0D7CB',
+                                    backgroundColor: '#FAF7F2',
+                                    color: '#6E5D4F',
+                                    fontSize: '0.825rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmTailorAssignment}
+                                style={{
+                                    padding: '0.55rem 1.25rem',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: '#C4975A',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.825rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 6px rgba(196,151,90,0.3)',
+                                }}
+                            >
+                                Confirm & Start Cutting →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Toast Feedback Notification ──────────────────────────────────── */}
+            {boardToast && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        bottom: '2rem',
+                        right: '2rem',
+                        backgroundColor: '#1C0F07',
+                        color: '#FFFFFF',
+                        padding: '0.75rem 1.25rem',
+                        borderRadius: '10px',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+                        zIndex: 1100,
+                        border: '1px solid rgba(255,255,255,0.1)',
+                    }}
+                >
+                    {boardToast}
                 </div>
             )}
         </div>

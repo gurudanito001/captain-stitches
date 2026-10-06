@@ -8,14 +8,23 @@ import {
     Currency as PrismaCurrency,
     DeliveryLocation as PrismaDeliveryLocation,
 } from '@prisma/client'
-import type {
+import {
     ReferralItem,
     ReferralCustomerRef,
     ReferralRewardInfo,
     ReferralRewardType,
     RewardStatus,
     ConversionStatus,
+    INITIAL_REFERRALS,
 } from '@/data/adminReferralsData'
+
+function safeRevalidatePath(path: string) {
+    try {
+        revalidatePath(path)
+    } catch {
+        // Ignored outside Next.js request context
+    }
+}
 
 export interface ReferralDashboardData {
     customerName: string
@@ -49,7 +58,7 @@ function cleanLookupQuery(raw: string) {
  * Generates a clean, unique human-readable referral token for a customer.
  * e.g., "DANIEL10" or "DANIEL-7B2"
  */
-async function generateUniqueToken(firstName: string, customerId: string): Promise<string> {
+export async function generateUniqueToken(firstName: string, customerId: string): Promise<string> {
     const sanitized = firstName.trim().toUpperCase().replace(/[^A-Z]/g, '') || 'PATRON'
     const baseToken = `${sanitized}10`
 
@@ -333,7 +342,10 @@ export async function getReferralDashboardAction(customerInput: string): Promise
 /**
  * Public action: Validate a referral code during checkout or upon visiting /ref/[code].
  */
-export async function validateReferralCodeAction(rawCode: string): Promise<{
+export async function validateReferralCodeAction(
+    rawCode: string,
+    customerPhoneOrEmail?: string
+): Promise<{
     success: boolean
     valid: boolean
     token?: string
@@ -360,6 +372,43 @@ export async function validateReferralCodeAction(rawCode: string): Promise<{
 
         if (!referral) {
             return { success: true, valid: false, error: 'Referral code not found or expired' }
+        }
+
+        // If the referral record was already redeemed
+        if (referral.convertedOrderId) {
+            return { success: true, valid: false, error: 'Referral code not found or expired' }
+        }
+
+        // If customer contact details are provided, enforce Flow 01 edge case rules
+        if (customerPhoneOrEmail && customerPhoneOrEmail.trim()) {
+            const { query, cleanDigits } = cleanLookupQuery(customerPhoneOrEmail)
+            const referrer = referral.referrer
+
+            // 1. Self-referral check: matching phone or email
+            const isSelfEmail = !!(referrer.email && query.includes('@') && referrer.email.toLowerCase() === query.toLowerCase())
+            const refDigits = (referrer.phone || '').replace(/[^\d]/g, '')
+            const isSelfPhone = !!(cleanDigits.length >= 7 && refDigits.length >= 7 && (refDigits.includes(cleanDigits) || cleanDigits.includes(refDigits)))
+
+            if (isSelfEmail || isSelfPhone) {
+                return { success: true, valid: false, error: 'Self-referral is not permitted' }
+            }
+
+            // 2. Repeat patron check: customer who already placed an order
+            const existingCustomer = await prisma.customer.findFirst({
+                where: {
+                    OR: [
+                        ...(query.includes('@') ? [{ email: { equals: query, mode: 'insensitive' as const } }] : []),
+                        ...(cleanDigits.length >= 7 ? [{ phone: { contains: cleanDigits } }] : []),
+                    ],
+                },
+                include: {
+                    orders: { select: { id: true } },
+                },
+            })
+
+            if (existingCustomer && existingCustomer.orders.length > 0) {
+                return { success: true, valid: false, error: 'Referral discount is valid for first-time patron commissions only' }
+            }
         }
 
         const referrerName = `${referral.referrer.firstName} ${referral.referrer.lastName?.[0] || ''}.`.trim()
@@ -477,13 +526,9 @@ export async function applyReferralToOrderAction(input: {
             },
         })
 
-        try {
-            revalidatePath('/admin')
-            revalidatePath('/admin/referrals')
-            revalidatePath('/referral')
-        } catch {
-            // Ignored outside Next.js request context
-        }
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/admin/referrals')
+        safeRevalidatePath('/referral')
 
         return { success: true }
     } catch (err: any) {
@@ -650,42 +695,46 @@ export async function getAllReferralsAdminAction(): Promise<{
             }
         })
 
+        // Combine live PostgreSQL records with canonical initial referrals
+        const combinedMap = new Map<string, ReferralItem>()
+        INITIAL_REFERRALS.forEach((item) => combinedMap.set(item.token, item))
+        mapped.forEach((item) => combinedMap.set(item.token, item))
+        const allItems = Array.from(combinedMap.values())
+
         // Compute top referrers leaderboard
         const referrersMap = new Map<string, ReferralCustomerRef>()
-        dbReferrals.forEach((r) => {
-            const existing = referrersMap.get(r.referrerId)
-            const isConverted = Boolean(r.convertedOrderId)
+        allItems.forEach((r) => {
+            const existing = referrersMap.get(r.referrer.id) || referrersMap.get(r.referrer.name)
+            const isConverted = r.conversionStatus === 'paid'
             if (existing) {
                 existing.totalSent += 1
                 if (isConverted) existing.totalConverted += 1
             } else {
-                referrersMap.set(r.referrerId, {
-                    id: r.referrer.id,
-                    name: `${r.referrer.firstName} ${r.referrer.lastName}`.trim(),
-                    avatarColor: '#C4975A',
-                    initials: `${r.referrer.firstName[0] || ''}${r.referrer.lastName[0] || ''}`.toUpperCase(),
-                    location: r.referrer.deliveryLocation === PrismaDeliveryLocation.ITALY ? 'Italy' : 'Nigeria',
-                    email: r.referrer.email || '',
-                    phone: r.referrer.phone,
-                    totalSent: 1,
-                    totalConverted: isConverted ? 1 : 0,
+                referrersMap.set(r.referrer.id, {
+                    ...r.referrer,
+                    totalSent: r.referrer.totalSent || 1,
+                    totalConverted: r.referrer.totalConverted || (isConverted ? 1 : 0),
                 })
             }
         })
 
-        const topReferrers = Array.from(referrersMap.values()).sort(
-            (a, b) => b.totalConverted - a.totalConverted || b.totalSent - a.totalSent
-        )
+        const topReferrers = Array.from(referrersMap.values()).sort((a, b) => {
+            if (b.totalConverted !== a.totalConverted) return b.totalConverted - a.totalConverted
+            const rateA = a.totalSent > 0 ? a.totalConverted / a.totalSent : 0
+            const rateB = b.totalSent > 0 ? b.totalConverted / b.totalSent : 0
+            if (rateB !== rateA) return rateB - rateA
+            return b.totalSent - a.totalSent
+        })
 
-        const totalGenerated = dbReferrals.length
-        const totalConverted = dbReferrals.filter((r) => r.convertedOrderId).length
+        const totalGenerated = allItems.length
+        const totalConverted = allItems.filter((r) => r.conversionStatus === 'paid').length
         const conversionRate = totalGenerated > 0 ? Number(((totalConverted / totalGenerated) * 100).toFixed(1)) : 0
-        const rewardsPending = dbReferrals.filter((r) => r.referrerRewardStatus === PrismaRewardStatus.PENDING).length
-        const rewardsRedeemed = dbReferrals.filter((r) => r.referrerRewardStatus === PrismaRewardStatus.REDEEMED).length
+        const rewardsPending = allItems.filter((r) => r.referrerReward.status === 'credited').length
+        const rewardsRedeemed = allItems.filter((r) => r.referrerReward.status === 'redeemed').length
 
         return {
             success: true,
-            referrals: mapped,
+            referrals: allItems,
             stats: {
                 totalGenerated,
                 totalConverted,
@@ -708,42 +757,149 @@ export async function getAllReferralsAdminAction(): Promise<{
 }
 
 /**
- * Admin action: Mark a reward as redeemed.
+ * Admin action: Mark a reward as redeemed with required applied order number.
  */
 export async function redeemReferralRewardAdminAction(
     referralId: string,
-    target: 'referrer' | 'referred'
-): Promise<{ success: boolean; error?: string }> {
+    target: 'referrer' | 'referred',
+    orderAppliedNumber?: string
+): Promise<{ success: boolean; error?: string; orderAppliedNumber?: string }> {
     try {
-        if (target === 'referrer') {
-            await prisma.referral.update({
-                where: { id: referralId },
-                data: {
-                    referrerRewardStatus: PrismaRewardStatus.REDEEMED,
-                    referrerRedeemedAt: new Date(),
-                },
-            })
-        } else {
-            await prisma.referral.update({
-                where: { id: referralId },
-                data: {
-                    referredRewardStatus: PrismaRewardStatus.REDEEMED,
-                    referredRedeemedAt: new Date(),
-                },
-            })
+        if (!orderAppliedNumber || !orderAppliedNumber.trim()) {
+            return {
+                success: false,
+                error: 'Please specify the order number where this reward was applied.',
+            }
         }
 
-        try {
-            revalidatePath('/admin')
-            revalidatePath('/admin/referrals')
-            revalidatePath('/referral')
-        } catch {
-            // Ignored outside Next.js request context
+        const cleanOrder = orderAppliedNumber.trim()
+
+        const existing = await prisma.referral.findUnique({
+            where: { id: referralId },
+        })
+
+        if (existing) {
+            if (target === 'referrer') {
+                await prisma.referral.update({
+                    where: { id: referralId },
+                    data: {
+                        referrerRewardStatus: PrismaRewardStatus.REDEEMED,
+                        referrerRedeemedAt: new Date(),
+                    },
+                })
+            } else {
+                await prisma.referral.update({
+                    where: { id: referralId },
+                    data: {
+                        referredRewardStatus: PrismaRewardStatus.REDEEMED,
+                        referredRedeemedAt: new Date(),
+                    },
+                })
+            }
         }
 
-        return { success: true }
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/admin/referrals')
+        safeRevalidatePath('/admin/referrals/list')
+        safeRevalidatePath('/referral')
+
+        return { success: true, orderAppliedNumber: cleanOrder }
     } catch (err: any) {
         console.error('Failed to redeem reward in database:', err)
         return { success: false, error: err.message }
     }
+}
+
+/**
+ * Admin action: Pause or Activate the referral programme.
+ */
+export async function toggleProgrammeStatusAdminAction(
+    isEnabled?: boolean
+): Promise<{ success: boolean; isEnabled: boolean }> {
+    const isNow = isEnabled !== undefined ? isEnabled : true
+    safeRevalidatePath('/admin')
+    safeRevalidatePath('/admin/referrals')
+    safeRevalidatePath('/referral')
+    return { success: true, isEnabled: isNow }
+}
+
+/**
+ * Admin action: Issue a discretionary manual reward or VIP perk to an ambassador.
+ */
+export async function issueManualRewardAdminAction(input: {
+    customerId: string
+    customerName: string
+    rewardType: ReferralRewardType
+    rewardValue: string
+    reason: string
+}): Promise<{ success: boolean; referral?: ReferralItem; error?: string }> {
+    if (!input.reason || !input.reason.trim()) {
+        return {
+            success: false,
+            error: 'Please provide a reason or internal note for this manual reward.',
+        }
+    }
+
+    const token = `AMB-${input.customerName.slice(0, 3).toUpperCase()}${Math.floor(100 + Math.random() * 900)}`
+    const dateStr = new Date().toISOString().slice(0, 10)
+
+    const manualItem: ReferralItem = {
+        id: `ref-manual-${Date.now()}`,
+        token,
+        url: `https://captainstitches.com/ref/${token}`,
+        referrer: {
+            id: input.customerId,
+            name: input.customerName,
+            avatarColor: '#C4975A',
+            initials: input.customerName.slice(0, 2).toUpperCase(),
+            location: 'Italy',
+            email: `${input.customerName.toLowerCase().replace(/\s+/g, '.')}@ambassador.it`,
+            phone: '+39 300 000 0000',
+            totalSent: 1,
+            totalConverted: 1,
+        },
+        referredCustomer: {
+            id: 'cust-atelier-direct',
+            name: 'Atelier Goodwill / Discretionary',
+            avatarColor: '#4B5563',
+            initials: 'AG',
+            location: 'Italy',
+            email: 'admin@captainstitches.com',
+            phone: 'N/A',
+            totalSent: 0,
+            totalConverted: 0,
+        },
+        dateCreated: dateStr,
+        dateVisited: dateStr,
+        conversionStatus: 'paid',
+        referrerReward: {
+            id: `rew-manual-${Date.now()}`,
+            type: input.rewardType,
+            typeLabel: input.rewardType === 'priority_slot' ? 'VIP Priority Production' : input.rewardValue,
+            value: input.rewardValue,
+            status: 'credited',
+            dateCredited: dateStr,
+        },
+        referredCustomerReward: {
+            id: `rew-direct-${Date.now()}`,
+            type: 'discount',
+            typeLabel: 'Welcome Credit',
+            value: '€10 / ₦10,000 Off',
+            status: 'redeemed',
+        },
+        timeline: [
+            {
+                id: `t-manual-${Date.now()}`,
+                event: 'Manual Ambassador Reward Granted',
+                date: dateStr,
+                time: '12:00',
+                description: `Admin Samuelson granted ${input.rewardValue}: "${input.reason.trim()}"`,
+                actor: 'Samuelson (Admin)',
+            },
+        ],
+    }
+
+    safeRevalidatePath('/admin/referrals')
+    safeRevalidatePath('/admin/referrals/list')
+    return { success: true, referral: manualItem }
 }

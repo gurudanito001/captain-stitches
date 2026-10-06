@@ -174,15 +174,236 @@ const STORAGE_KEY_CAMPAIGNS = 'cs_marketing_campaigns_v2'
 const STORAGE_KEY_SETTINGS = 'cs_marketing_settings_v2'
 
 // SEED SUBSCRIBERS
-export const INITIAL_SUBSCRIBERS: MarketingSubscriber[] = []
+export const INITIAL_SUBSCRIBERS: MarketingSubscriber[] = [
+    {
+        id: 'sub-adewale-01',
+        name: 'Adewale Okafor',
+        email: 'adewale.okafor@diaspora.it',
+        language: 'IT',
+        location: 'Italy',
+        signupSource: 'order_confirmation',
+        dateSubscribed: '2026-03-15',
+        status: 'active',
+        openRate: 85,
+        lastOpenedEmailDate: '2026-06-01',
+    },
+    {
+        id: 'sub-chidi-02',
+        name: 'Chidi Okonkwo',
+        email: 'chidi.okonkwo@atelier.it',
+        language: 'IT',
+        location: 'Italy',
+        signupSource: 'homepage',
+        dateSubscribed: '2026-04-10',
+        status: 'active',
+        openRate: 70,
+        lastOpenedEmailDate: '2026-05-28',
+    },
+    {
+        id: 'sub-daniel-01',
+        name: 'Daniel Nwokocha',
+        email: 'gurudanito001@gmail.com',
+        language: 'EN',
+        location: 'Nigeria',
+        signupSource: 'referral',
+        dateSubscribed: '2026-02-20',
+        status: 'active',
+        openRate: 90,
+        lastOpenedEmailDate: '2026-06-04',
+    },
+    {
+        id: 'sub-emeka-01',
+        name: 'Emeka Eze',
+        email: 'emeka.eze@diaspora.ng',
+        language: 'EN',
+        location: 'Nigeria',
+        signupSource: 'homepage',
+        dateSubscribed: '2026-04-22',
+        status: 'active',
+        openRate: 65,
+        lastOpenedEmailDate: '2026-05-30',
+    },
+    {
+        id: 'sub-luca-01',
+        name: 'Luca Rossi',
+        email: 'luca.rossi@milano.it',
+        language: 'IT',
+        location: 'Italy',
+        signupSource: 'referral',
+        dateSubscribed: '2026-05-01',
+        status: 'active',
+        openRate: 60,
+        lastOpenedEmailDate: '2026-05-25',
+    },
+    {
+        id: 'sub-matteo-01',
+        name: 'Matteo Ferrari',
+        email: 'matteo.ferrari@roma.it',
+        language: 'IT',
+        location: 'Italy',
+        signupSource: 'blog',
+        dateSubscribed: '2026-05-12',
+        status: 'active',
+        openRate: 75,
+        lastOpenedEmailDate: '2026-06-02',
+    },
+    {
+        id: 'sub-chidinma-01',
+        name: 'Chidinma Okeke',
+        email: 'chidinma.okeke@client.com',
+        language: 'EN',
+        location: 'Nigeria',
+        signupSource: 'order_confirmation',
+        dateSubscribed: '2026-03-01',
+        status: 'active',
+        openRate: 50,
+        lastOpenedEmailDate: '2026-05-18',
+    },
+    {
+        id: 'sub-samuel-01',
+        name: 'Samuel Anaele',
+        email: 'samuel.anaele@atelier.it',
+        language: 'IT',
+        location: 'Italy',
+        signupSource: 'homepage',
+        dateSubscribed: '2026-01-15',
+        status: 'active',
+        openRate: 80,
+        lastOpenedEmailDate: '2026-06-03',
+    },
+    {
+        id: 'sub-unsub-01',
+        name: 'Unsubscribed Patron',
+        email: 'unsubscribed.user@example.com',
+        language: 'EN',
+        location: 'Nigeria',
+        signupSource: 'homepage',
+        dateSubscribed: '2026-02-10',
+        status: 'unsubscribed',
+        openRate: 15,
+        lastOpenedEmailDate: '2026-03-01',
+    },
+    {
+        id: 'sub-bounce-01',
+        name: 'Bounced User',
+        email: 'bounced.tester@domain.invalid',
+        language: 'IT',
+        location: 'Other',
+        signupSource: 'manual',
+        dateSubscribed: '2026-04-05',
+        status: 'bounced',
+        openRate: 0,
+    },
+]
 
 // SEED SEGMENTS
-export const INITIAL_SEGMENTS: MarketingSegment[] = []
+export const INITIAL_SEGMENTS: MarketingSegment[] = [
+    {
+        id: 'seg-italy-diaspora',
+        name: 'Italy & European Diaspora',
+        description: 'Patrons residing in Italy, Switzerland, and the European diaspora.',
+        subscriberCount: 5,
+        lastUsedDate: '2026-06-01',
+        isPrebuilt: true,
+        logic: 'AND',
+        conditions: [{ id: 'cond-1', field: 'location', operator: 'is', value: 'Italy' }],
+    },
+    {
+        id: 'seg-nigerian-patrons',
+        name: 'Nigerian Patrons',
+        description: 'Bespoke clients located across Lagos, Abuja, and Aba craftsmanship centers.',
+        subscriberCount: 3,
+        lastUsedDate: '2026-05-20',
+        isPrebuilt: true,
+        logic: 'AND',
+        conditions: [{ id: 'cond-2', field: 'location', operator: 'is', value: 'Nigeria' }],
+    },
+    {
+        id: 'seg-vip-circle',
+        name: 'VIP Ambassador Circle',
+        description: 'High-value clients who have made multiple orders or referred friends.',
+        subscriberCount: 4,
+        lastUsedDate: '2026-05-15',
+        isPrebuilt: true,
+        logic: 'OR',
+        conditions: [{ id: 'cond-3', field: 'order_count', operator: 'greater_than', value: '1' }],
+    },
+    {
+        id: 'seg-new-leads',
+        name: 'New Newsletter Leads',
+        description: 'Recent subscribers captured from the website looking to make their first commission.',
+        subscriberCount: 4,
+        lastUsedDate: '2026-06-02',
+        isPrebuilt: true,
+        logic: 'AND',
+        conditions: [{ id: 'cond-4', field: 'signup_source', operator: 'is', value: 'homepage' }],
+    },
+]
 
 // SEED CAMPAIGNS
-export const INITIAL_CAMPAIGNS: MarketingCampaign[] = []
+export const INITIAL_CAMPAIGNS: MarketingCampaign[] = [
+    {
+        id: 'camp-autumn-winter-drop',
+        name: 'Autumn / Winter Bespoke Fabric Drop',
+        status: 'sent',
+        subjectEN: '✦ New Season Presidential Cashmere Arrived in Verona',
+        subjectIT: '✦ Nuova Collezione Cashmere Presidenziale Arrivata a Verona',
+        previewTextEN: 'Exclusive early-access bespoke tailoring slots for December events.',
+        previewTextIT: 'Accesso esclusivo alle prenotazioni su misura per gli eventi invernali.',
+        fromName: 'Samuelson at CaptainStitches',
+        replyTo: 'samuelson@captainstitches.com',
+        audienceType: 'segment',
+        targetSegmentId: 'seg-italy-diaspora',
+        targetSegmentName: 'Italy & European Diaspora',
+        recipientCount: 450,
+        sendDate: '2026-06-01',
+        sendTime: '11:00',
+        timezone: 'Europe/Rome',
+        contentEN: {
+            title: 'Presidential Cashmere & Royal Agbada Collection',
+            subtitle: 'Direct from our workshop to Verona atelier',
+            body: 'Dear Patron,\n\nWe have just received a curated consignment of high-twist Italian wool and hand-spun African cashmere.\n\nEnjoy an exclusive 10% loyalty discount with code PRESIDENTIAL10 on your next bespoke booking.',
+            ctaText: 'Book Your Workshop Slot →',
+            ctaUrl: '/order',
+        },
+        contentIT: {
+            title: 'Collezione Cashmere Presidenziale e Agbada Reale',
+            subtitle: 'Dal nostro laboratorio di confezione all’atelier di Verona',
+            body: 'Gentile Cliente,\n\nÈ arrivata la nuova fornitura di lane e sete africane di altissima gamma.\n\nUtilizza il codice PRESIDENTIAL10 per il 10% di sconto sulla tua prossima commissione.',
+            ctaText: 'Prenota il Tuo Capo Sartoriale →',
+            ctaUrl: '/order',
+        },
+        stats: {
+            delivered: 450,
+            opened: 236,
+            uniqueOpens: 215,
+            openRate: 52.4,
+            clicked: 82,
+            uniqueClicks: 71,
+            clickRate: 18.2,
+            unsubscribes: 1,
+            hardBounces: 2,
+            softBounces: 1,
+            hourlyOpens48h: [
+                { hour: 0, label: '11:00', count: 45 },
+                { hour: 1, label: '12:00', count: 62 },
+                { hour: 2, label: '13:00', count: 38 },
+                { hour: 3, label: '14:00', count: 25 },
+            ],
+            clickMapLinks: [
+                { url: '/order', label: 'Book Your Workshop Slot', clicks: 58, uniqueClicks: 51, ctr: 12.8, topPercent: 70 },
+                { url: '/catalogue', label: 'Browse Lookbook', clicks: 24, uniqueClicks: 20, ctr: 5.4, topPercent: 30 },
+            ],
+            deviceSplit: { mobile: 72, desktop: 28 },
+            locationSplit: { italy: 380, nigeria: 55, other: 15 },
+            languageSplit: { en: 60, it: 40 },
+            unsubscribedList: [{ name: 'Test Unsub', email: 'unsub.tester@example.com', reason: 'Too many emails' }],
+            bouncedList: [{ email: 'bounced.patron@invalid.it', type: 'Hard Bounce', reason: 'Domain does not exist' }],
+        },
+        lastSaved: '2026-06-01 · 11:00',
+    },
+]
 
-// INITIAL SETTINGS
 export const INITIAL_MARKETING_SETTINGS: MarketingSettings = {
     platform: 'mailchimp',
     isConnected: true,
@@ -236,25 +457,32 @@ export const INITIAL_MARKETING_SETTINGS: MarketingSettings = {
     },
 }
 
-// ==========================================
-// STORAGE & CRUD HELPERS
-// ==========================================
+let inMemorySubscribers: MarketingSubscriber[] = [...INITIAL_SUBSCRIBERS]
+let inMemorySegments: MarketingSegment[] = [...INITIAL_SEGMENTS]
+let inMemoryCampaigns: MarketingCampaign[] = [...INITIAL_CAMPAIGNS]
+let inMemorySettings: MarketingSettings = { ...INITIAL_MARKETING_SETTINGS }
 
 export function getAllSubscribers(): MarketingSubscriber[] {
-    if (typeof window === 'undefined') return INITIAL_SUBSCRIBERS
+    if (typeof window === 'undefined') return inMemorySubscribers
     try {
         const stored = localStorage.getItem(STORAGE_KEY_SUBSCRIBERS)
         if (!stored) {
             localStorage.setItem(STORAGE_KEY_SUBSCRIBERS, JSON.stringify(INITIAL_SUBSCRIBERS))
             return INITIAL_SUBSCRIBERS
         }
-        return JSON.parse(stored)
+        const parsed = JSON.parse(stored)
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            localStorage.setItem(STORAGE_KEY_SUBSCRIBERS, JSON.stringify(INITIAL_SUBSCRIBERS))
+            return INITIAL_SUBSCRIBERS
+        }
+        return parsed
     } catch {
-        return INITIAL_SUBSCRIBERS
+        return inMemorySubscribers
     }
 }
 
 export function saveAllSubscribers(subs: MarketingSubscriber[]): void {
+    inMemorySubscribers = [...subs]
     if (typeof window === 'undefined') return
     try {
         localStorage.setItem(STORAGE_KEY_SUBSCRIBERS, JSON.stringify(subs))
@@ -295,20 +523,26 @@ export function bulkUpdateSubscriberStatus(ids: string[], newStatus: SubscriberS
 
 // SEGMENTS CRUD
 export function getAllSegments(): MarketingSegment[] {
-    if (typeof window === 'undefined') return INITIAL_SEGMENTS
+    if (typeof window === 'undefined') return inMemorySegments
     try {
         const stored = localStorage.getItem(STORAGE_KEY_SEGMENTS)
         if (!stored) {
             localStorage.setItem(STORAGE_KEY_SEGMENTS, JSON.stringify(INITIAL_SEGMENTS))
             return INITIAL_SEGMENTS
         }
-        return JSON.parse(stored)
+        const parsed = JSON.parse(stored)
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            localStorage.setItem(STORAGE_KEY_SEGMENTS, JSON.stringify(INITIAL_SEGMENTS))
+            return INITIAL_SEGMENTS
+        }
+        return parsed
     } catch {
-        return INITIAL_SEGMENTS
+        return inMemorySegments
     }
 }
 
 export function saveAllSegments(segments: MarketingSegment[]): void {
+    inMemorySegments = [...segments]
     if (typeof window === 'undefined') return
     try {
         localStorage.setItem(STORAGE_KEY_SEGMENTS, JSON.stringify(segments))
@@ -340,20 +574,26 @@ export function deleteSegment(id: string): MarketingSegment[] {
 
 // CAMPAIGNS CRUD
 export function getAllCampaigns(): MarketingCampaign[] {
-    if (typeof window === 'undefined') return INITIAL_CAMPAIGNS
+    if (typeof window === 'undefined') return inMemoryCampaigns
     try {
         const stored = localStorage.getItem(STORAGE_KEY_CAMPAIGNS)
         if (!stored) {
             localStorage.setItem(STORAGE_KEY_CAMPAIGNS, JSON.stringify(INITIAL_CAMPAIGNS))
             return INITIAL_CAMPAIGNS
         }
-        return JSON.parse(stored)
+        const parsed = JSON.parse(stored)
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            localStorage.setItem(STORAGE_KEY_CAMPAIGNS, JSON.stringify(INITIAL_CAMPAIGNS))
+            return INITIAL_CAMPAIGNS
+        }
+        return parsed
     } catch {
-        return INITIAL_CAMPAIGNS
+        return inMemoryCampaigns
     }
 }
 
 export function saveAllCampaigns(campaigns: MarketingCampaign[]): void {
+    inMemoryCampaigns = [...campaigns]
     if (typeof window === 'undefined') return
     try {
         localStorage.setItem(STORAGE_KEY_CAMPAIGNS, JSON.stringify(campaigns))
@@ -422,20 +662,21 @@ export function duplicateCampaign(id: string): MarketingCampaign | null {
 
 // SETTINGS
 export function getMarketingSettings(): MarketingSettings {
-    if (typeof window === 'undefined') return INITIAL_MARKETING_SETTINGS
+    if (typeof window === 'undefined') return inMemorySettings
     try {
         const stored = localStorage.getItem(STORAGE_KEY_SETTINGS)
         if (!stored) {
-            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(INITIAL_MARKETING_SETTINGS))
-            return INITIAL_MARKETING_SETTINGS
+            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(inMemorySettings))
+            return inMemorySettings
         }
         return JSON.parse(stored)
     } catch {
-        return INITIAL_MARKETING_SETTINGS
+        return inMemorySettings
     }
 }
 
 export function saveMarketingSettings(settings: MarketingSettings): void {
+    inMemorySettings = { ...settings }
     if (typeof window === 'undefined') return
     try {
         localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings))

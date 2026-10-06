@@ -9,7 +9,14 @@ import {
     PaymentGateway as PrismaPaymentGateway,
     ReferralRewardType as PrismaRewardType,
     ReferralRewardStatus as PrismaRewardStatus,
+    MeasurementUnit as PrismaMeasurementUnit,
+    UserRole as PrismaUserRole,
 } from '@prisma/client'
+import { generateUniqueToken } from '@/lib/actions/referrals'
+import {
+    sendOrderConfirmationEmails,
+    sendOrderStatusMilestoneEmail,
+} from '@/lib/services/email'
 import type {
     AdminOrder,
     OrderStatus,
@@ -18,6 +25,14 @@ import type {
     CustomerProfile,
     MeasurementProfile,
 } from '@/data/adminOrdersData'
+
+function safeRevalidatePath(path: string) {
+    try {
+        revalidatePath(path)
+    } catch {
+        // Ignore outside Next.js request context
+    }
+}
 
 export interface CreateOrderActionInput {
     orderNumber?: string
@@ -61,6 +76,27 @@ export async function createOrderAdminAction(input: CreateOrderActionInput): Pro
     error?: string
 }> {
     try {
+        // Validation: Deposit cannot exceed total amount
+        if (input.depositAmount > input.totalAmount) {
+            return {
+                success: false,
+                error: 'Deposit amount cannot exceed total commission price.',
+            }
+        }
+
+        // Validation: Deadline date cannot be in the past
+        if (input.deadline) {
+            const deadlineDate = new Date(input.deadline)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            if (deadlineDate < today) {
+                return {
+                    success: false,
+                    error: 'Production deadline date cannot be in the past.',
+                }
+            }
+        }
+
         // Find existing customer
         const customer = await prisma.customer.findUnique({
             where: { id: input.customerId },
@@ -200,11 +236,36 @@ export async function createOrderAdminAction(input: CreateOrderActionInput): Pro
             ],
         }
 
-        revalidatePath('/admin')
-        revalidatePath('/admin/orders')
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/admin/orders')
+
+        // Dispatch order confirmation emails to customer and admin
+        sendOrderConfirmationEmails({
+            id: created.id,
+            orderNumber: created.orderNumber,
+            customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+            customerEmail: customer.email || undefined,
+            customerPhone: customer.phone,
+            deliveryAddress: created.deliveryAddress,
+            deliveryLocation: input.deliveryLocation,
+            designName: input.catalogueDesign?.name || input.customDesign?.name || 'Bespoke Attire',
+            fabric: input.catalogueDesign?.fabric || input.customDesign?.fabric || 'Imperial Cashmere',
+            colour: input.catalogueDesign?.colour || input.customDesign?.colour || 'Selected Tone',
+            sizingMode: 'Bespoke',
+            currency: input.currency,
+            totalAmount: input.totalAmount,
+            depositAmount: input.depositAmount,
+            balanceAmount: Math.max(0, input.totalAmount - input.depositAmount),
+            deadline: input.deadline,
+            occasion: input.occasion,
+        }).catch((err) => console.warn('[Admin Order Email] Non-blocking dispatch error:', err))
+
         return { success: true, order: mappedOrder }
     } catch (error: any) {
         console.error('Failed to create order in database:', error)
+        if (error?.code === 'P2002') {
+            return { success: false, error: 'An order with this order number already exists.' }
+        }
         return { success: false, error: error.message || 'Database error creating order' }
     }
 }
@@ -330,52 +391,312 @@ export async function getAllOrdersAdminAction(): Promise<{
     }
 }
 
+export interface UpdateOrderStatusOptions {
+    notes?: string
+    tailorAssigned?: string
+    inspectionNotes?: string
+    inspectionMediaUrls?: string[]
+    inspectionVideoUrl?: string
+    courierName?: string
+    trackingNumber?: string
+    trackingUrl?: string
+    confirmUnpaidDispatch?: boolean
+}
+
 export async function updateOrderStatusAdminAction(
     orderId: string,
     newStatus: OrderStatus,
-    notes?: string
-): Promise<{ success: boolean; error?: string }> {
+    notesOrOptions?: string | UpdateOrderStatusOptions
+): Promise<{ success: boolean; error?: string; warning?: string }> {
     try {
         const order = await prisma.order.findUnique({
             where: { id: orderId },
-            select: { status: true },
+            include: {
+                customer: true,
+                design: true,
+            },
         })
 
         if (!order) {
             return { success: false, error: 'Order not found' }
         }
 
+        const options: UpdateOrderStatusOptions =
+            typeof notesOrOptions === 'object' && notesOrOptions !== null
+                ? notesOrOptions
+                : { notes: typeof notesOrOptions === 'string' ? notesOrOptions : undefined }
+
+        const notes = options.notes
+
+        // 1. Mandatory Quality Gate Check for DISPATCHED
+        if (newStatus === 'DISPATCHED') {
+            if (order.status !== 'APPROVED' && !order.inspectionApprovedAt) {
+                return {
+                    success: false,
+                    error: 'Order cannot be dispatched without Master Tailor inspection approval.',
+                }
+            }
+        }
+
         const prismaStatus = newStatus as PrismaOrderStatus
+        const updateData: any = {
+            status: prismaStatus,
+            updatedAt: new Date(),
+        }
+
+        // 2. Stage-specific field transitions
+        if (options.tailorAssigned) {
+            const tailorUser = await prisma.user.findFirst({
+                where: {
+                    OR: [
+                        { displayName: { contains: options.tailorAssigned.split(' ')[0], mode: 'insensitive' } },
+                        { firstName: { contains: options.tailorAssigned.split(' ')[0], mode: 'insensitive' } },
+                        { lastName: { contains: options.tailorAssigned.split(' ')[0], mode: 'insensitive' } },
+                    ],
+                },
+            })
+            if (tailorUser) {
+                updateData.tailorId = tailorUser.id
+            }
+        }
+
+        if (newStatus === 'APPROVED') {
+            updateData.inspectionApprovedAt = new Date()
+            if (options.inspectionNotes || notes) {
+                updateData.inspectionNotes = options.inspectionNotes || notes
+            }
+            const adminUser = await prisma.user.findFirst({
+                where: {
+                    OR: [
+                        { role: PrismaUserRole.ADMIN },
+                        { role: PrismaUserRole.SUPER_ADMIN },
+                        { email: { contains: 'samuelson', mode: 'insensitive' } },
+                    ],
+                },
+            })
+            if (adminUser) {
+                updateData.inspectionApprovedById = adminUser.id
+            }
+        } else if (newStatus === 'DISPATCHED') {
+            updateData.dispatchedAt = new Date()
+            if (options.courierName) {
+                updateData.courierName = options.courierName
+            } else if (!order) {
+                updateData.courierName = 'DHL Express'
+            }
+            if (options.trackingNumber) {
+                updateData.trackingNumber = options.trackingNumber
+                updateData.trackingUrl =
+                    options.trackingUrl ||
+                    `https://www.dhl.com/en/express/tracking.html?AWB=${encodeURIComponent(options.trackingNumber)}`
+            }
+        } else if (newStatus === 'DELIVERED') {
+            updateData.deliveredAt = new Date()
+        }
+
+        if (options.inspectionMediaUrls && options.inspectionMediaUrls.length > 0) {
+            updateData.inspectionMediaUrls = options.inspectionMediaUrls
+        }
+        if (options.inspectionVideoUrl) {
+            updateData.inspectionVideoUrl = options.inspectionVideoUrl
+        }
+
+        let defaultNote = `Order advanced to ${newStatus}`
+        if (order.status === 'INSPECTION' && newStatus === 'IN_PRODUCTION') {
+            defaultNote = notes ? `Alteration requested: ${notes}` : 'Alterations requested by Master Tailor Samuelson'
+        } else if (newStatus === 'IN_PRODUCTION') {
+            defaultNote = options.tailorAssigned
+                ? `Assigned to ${options.tailorAssigned} & fabric cutting active.`
+                : 'Fabric cut & tailoring active in workshop.'
+        } else if (newStatus === 'APPROVED') {
+            defaultNote = notes ? `Approved by Master Tailor Samuelson: ${notes}` : 'Craftsmanship & fit signed off by Master Tailor Samuelson'
+        } else if (newStatus === 'DISPATCHED') {
+            defaultNote = options.trackingNumber
+                ? `Dispatched via ${options.courierName || 'DHL Express'}. Tracking: ${options.trackingNumber}`
+                : `Dispatched to client via ${options.courierName || 'DHL Express'}`
+        } else if (newStatus === 'DELIVERED') {
+            defaultNote = 'Delivered to client. Review and ambassador referral unlocked.'
+        }
 
         await prisma.order.update({
             where: { id: orderId },
             data: {
-                status: prismaStatus,
-                updatedAt: new Date(),
+                ...updateData,
                 timeline: {
                     create: {
                         fromStatus: order.status,
                         toStatus: prismaStatus,
                         actorName: 'Samuelson Anaele',
-                        notes: notes || `Order advanced to ${newStatus}`,
+                        notes: notes || defaultNote,
                     },
                 },
             },
         })
 
-        revalidatePath('/admin')
-        revalidatePath('/admin/orders')
-        return { success: true }
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/admin/orders')
+        safeRevalidatePath(`/admin/orders/${orderId}`)
+        safeRevalidatePath('/track')
+
+        // Dispatch milestone update email to patron
+        if (order.customer) {
+            sendOrderStatusMilestoneEmail(
+                {
+                    id: order.id,
+                    orderNumber: order.orderNumber,
+                    customerName: `${order.customer.firstName} ${order.customer.lastName}`.trim(),
+                    customerEmail: order.customer.email || undefined,
+                    customerPhone: order.customer.phone,
+                    deliveryAddress: order.deliveryAddress,
+                    deliveryLocation: order.deliveryLocation,
+                    designName: order.design?.nameEN || 'Bespoke Attire',
+                    fabric: order.fabricChoice || 'Atelier Fabric',
+                    colour: order.colourChoice || 'Selected Tone',
+                    sizingMode: 'Bespoke',
+                    currency: order.currency,
+                    totalAmount: order.totalAmount,
+                    depositAmount: order.depositAmount,
+                    balanceAmount: order.balanceAmount,
+                    courierName: options.courierName || order.courierName || undefined,
+                    trackingNumber: options.trackingNumber || order.trackingNumber || undefined,
+                },
+                newStatus,
+                notes || defaultNote
+            ).catch((err) => console.warn('[Milestone Email] Non-blocking dispatch error:', err))
+        }
+
+        let warning: string | undefined
+        if (newStatus === 'DISPATCHED' && !order.balancePaid && order.balanceAmount > 0) {
+            const sym = order.currency === PrismaCurrency.EUR ? '€' : '₦'
+            warning = `This order has an outstanding balance of ${sym}${order.balanceAmount.toLocaleString()}. Dispatched before balance settlement.`
+        }
+
+        return { success: true, warning }
     } catch (error: any) {
         console.error('Failed to update order status in database:', error)
         return { success: false, error: error.message }
     }
 }
 
+export async function uploadOrderInspectionMediaAction(
+    orderId: string,
+    photos: string[],
+    videoUrl?: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
+            include: { customer: true, design: true },
+        })
+
+        if (!order) {
+            return { success: false, error: 'Order not found' }
+        }
+
+        const existing = order.inspectionMediaUrls || []
+        const merged = Array.from(new Set([...existing, ...photos]))
+
+        const isAdvanceToInspection =
+            order.status === PrismaOrderStatus.IN_PRODUCTION || order.status === PrismaOrderStatus.CONFIRMED
+
+        await prisma.order.update({
+            where: { id: orderId },
+            data: {
+                inspectionMediaUrls: merged,
+                ...(videoUrl ? { inspectionVideoUrl: videoUrl } : {}),
+                ...(isAdvanceToInspection ? { status: PrismaOrderStatus.INSPECTION } : {}),
+                timeline: isAdvanceToInspection
+                    ? {
+                          create: {
+                              fromStatus: order.status,
+                              toStatus: PrismaOrderStatus.INSPECTION,
+                              actorName: 'Workshop Tailor',
+                              notes: `Uploaded ${photos.length} inspection media item(s). Ready for Samuelson sign-off.`,
+                          },
+                      }
+                    : undefined,
+            },
+        })
+
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/admin/orders')
+        safeRevalidatePath(`/admin/orders/${orderId}`)
+        safeRevalidatePath('/track')
+
+        if (isAdvanceToInspection && order.customer) {
+            sendOrderStatusMilestoneEmail(
+                {
+                    id: order.id,
+                    orderNumber: order.orderNumber,
+                    customerName: `${order.customer.firstName} ${order.customer.lastName}`.trim(),
+                    customerEmail: order.customer.email || undefined,
+                    customerPhone: order.customer.phone,
+                    deliveryAddress: order.deliveryAddress,
+                    deliveryLocation: order.deliveryLocation,
+                    designName: order.design?.nameEN || 'Bespoke Attire',
+                    fabric: order.fabricChoice || 'Atelier Fabric',
+                    colour: order.colourChoice || 'Selected Tone',
+                    sizingMode: 'Bespoke',
+                    currency: order.currency,
+                    totalAmount: order.totalAmount,
+                    depositAmount: order.depositAmount,
+                    balanceAmount: order.balanceAmount,
+                    inspectionMediaUrls: merged,
+                },
+                'INSPECTION',
+                `Artisan uploaded ${photos.length} inspection photo(s).`
+            ).catch((err) => console.warn('[Inspection Email] Non-blocking dispatch error:', err))
+        }
+
+        return { success: true }
+    } catch (error: any) {
+        console.error('Failed to upload inspection media:', error)
+        return { success: false, error: error.message }
+    }
+}
+
+export async function approveOrderQualityAction(
+    orderId: string,
+    notes?: string
+): Promise<{ success: boolean; error?: string }> {
+    return updateOrderStatusAdminAction(orderId, 'APPROVED', {
+        notes: notes || 'Master Tailor Samuelson approved garment quality and fit.',
+        inspectionNotes: notes,
+    })
+}
+
+export async function requestOrderAlterationAction(
+    orderId: string,
+    alterationNotes: string
+): Promise<{ success: boolean; error?: string }> {
+    return updateOrderStatusAdminAction(orderId, 'IN_PRODUCTION', {
+        notes: alterationNotes || 'Alterations requested by Master Tailor Samuelson',
+    })
+}
+
+export async function dispatchOrderAction(
+    orderId: string,
+    payload: {
+        courierName?: string
+        trackingNumber: string
+        trackingUrl?: string
+        confirmUnpaidDispatch?: boolean
+    }
+): Promise<{ success: boolean; error?: string; warning?: string }> {
+    return updateOrderStatusAdminAction(orderId, 'DISPATCHED', {
+        courierName: payload.courierName || 'DHL Express',
+        trackingNumber: payload.trackingNumber,
+        trackingUrl: payload.trackingUrl,
+        confirmUnpaidDispatch: payload.confirmUnpaidDispatch,
+    })
+}
+
 export interface TrackedOrder {
     id: string
+    orderNumber?: string
     dbId: string
     customer: string
+    customerName?: string
     customerFullName: string
     customerEmail?: string
     phone: string
@@ -434,24 +755,35 @@ export async function trackOrderAction(rawQuery: string): Promise<{
         }
 
         const cleanDigits = query.replace(/[^\d]/g, '')
+        const strippedZero = cleanDigits.replace(/^0+/, '')
+        const last7 = cleanDigits.length >= 7 ? cleanDigits.slice(-7) : cleanDigits
         const upperQuery = query.toUpperCase()
 
         const dbOrder = await prisma.order.findFirst({
             where: {
                 OR: [
-                    { orderNumber: { equals: upperQuery, mode: 'insensitive' } },
-                    { orderNumber: { equals: query, mode: 'insensitive' } },
-                    { orderNumber: { contains: query, mode: 'insensitive' } },
+                    { orderNumber: { equals: upperQuery, mode: 'insensitive' as const } },
+                    { orderNumber: { equals: query, mode: 'insensitive' as const } },
+                    { orderNumber: { contains: query, mode: 'insensitive' as const } },
                     { id: query },
-                    { customer: { email: { equals: query, mode: 'insensitive' } } },
+                    { customer: { email: { equals: query, mode: 'insensitive' as const } } },
                     ...(cleanDigits.length >= 7
                         ? [
                               { customer: { phone: { contains: cleanDigits } } },
                               { customer: { whatsapp: { contains: cleanDigits } } },
+                              ...(strippedZero.length >= 7
+                                  ? [
+                                        { customer: { phone: { contains: strippedZero } } },
+                                        { customer: { whatsapp: { contains: strippedZero } } },
+                                    ]
+                                  : []),
+                              { customer: { phone: { contains: last7 } } },
+                              { customer: { whatsapp: { contains: last7 } } },
                           ]
                         : []),
                 ],
             },
+            orderBy: { createdAt: 'desc' },
             include: {
                 customer: true,
                 design: {
@@ -486,7 +818,7 @@ export async function trackOrderAction(rawQuery: string): Promise<{
             DELIVERED: 'Delivered',
         }
 
-        const designName = dbOrder.design?.nameEN || dbOrder.customDesignNotes || 'Bespoke Creation'
+        const designName = dbOrder.customDesignNotes || dbOrder.design?.nameEN || 'Bespoke Creation'
         const primaryPhoto =
             dbOrder.design?.photos?.find((p) => p.isPrimary)?.url ||
             dbOrder.design?.photos?.[0]?.url ||
@@ -515,8 +847,10 @@ export async function trackOrderAction(rawQuery: string): Promise<{
 
         const trackedOrder: TrackedOrder = {
             id: dbOrder.orderNumber,
+            orderNumber: dbOrder.orderNumber,
             dbId: dbOrder.id,
             customer: customerName,
+            customerName,
             customerFullName,
             customerEmail: dbOrder.customer?.email || undefined,
             phone: dbOrder.customer?.phone || '',
@@ -601,6 +935,7 @@ export interface CreatePublicOrderInput {
     depositAmount: number
     paymentGateway: 'stripe' | 'paystack'
     referralToken?: string
+    customImageUrl?: string
 }
 
 /**
@@ -683,6 +1018,7 @@ export async function createPublicOrderAction(input: CreatePublicOrderInput): Pr
                 fabricChoice: input.fabric,
                 colourChoice: input.colour,
                 additionalNotes: input.specialNotes || null,
+                inspectionMediaUrls: input.customImageUrl ? [input.customImageUrl] : [],
                 currency: prismaCurrency,
                 totalAmount: input.totalAmount,
                 depositAmount,
@@ -706,34 +1042,97 @@ export async function createPublicOrderAction(input: CreatePublicOrderInput): Pr
             },
         })
 
+        // 4b. If bespoke measurements provided, persist to customer measurements record
+        if (input.sizingMode === 'bespoke' && input.measurements) {
+            const parseMeasure = (val?: string) => {
+                if (!val) return null
+                const n = parseFloat(val)
+                return isNaN(n) ? null : n
+            }
+            const unit = input.measurements.unit?.toLowerCase() === 'cm' ? PrismaMeasurementUnit.CM : PrismaMeasurementUnit.INCHES
+
+            await prisma.measurement.upsert({
+                where: { customerId: customer.id },
+                create: {
+                    customerId: customer.id,
+                    unit,
+                    neck: parseMeasure(input.measurements.neck),
+                    shoulder: parseMeasure(input.measurements.shoulder),
+                    chest: parseMeasure(input.measurements.chest),
+                    sleeveLength: parseMeasure(input.measurements.sleeve),
+                    length: parseMeasure(input.measurements.shirtLength),
+                    waist: parseMeasure(input.measurements.waist),
+                    hips: parseMeasure(input.measurements.hip),
+                    trouserLength: parseMeasure(input.measurements.trouserLength),
+                    fitNotes: input.specialNotes || 'Captured from online bespoke checkout',
+                },
+                update: {
+                    unit,
+                    neck: parseMeasure(input.measurements.neck),
+                    shoulder: parseMeasure(input.measurements.shoulder),
+                    chest: parseMeasure(input.measurements.chest),
+                    sleeveLength: parseMeasure(input.measurements.sleeve),
+                    length: parseMeasure(input.measurements.shirtLength),
+                    waist: parseMeasure(input.measurements.waist),
+                    hips: parseMeasure(input.measurements.hip),
+                    trouserLength: parseMeasure(input.measurements.trouserLength),
+                    fitNotes: input.specialNotes || 'Updated from online bespoke checkout',
+                },
+            })
+        }
+
         // 5. Handle referral conversion if referral token was applied
         if (input.referralToken) {
             const tokenClean = input.referralToken.trim().toUpperCase()
             const referralRecord = await prisma.referral.findFirst({
                 where: {
-                    token: { equals: tokenClean, mode: 'insensitive' },
+                    token: { equals: tokenClean, mode: 'insensitive' as const },
+                    convertedOrderId: null,
                 },
                 include: {
                     referrer: true,
                 },
             })
 
-            if (referralRecord && referralRecord.referrerId !== customer.id) {
-                // Link conversion
-                await prisma.referral.update({
-                    where: { id: referralRecord.id },
-                    data: {
-                        referredCustomerId: customer.id,
-                        convertedOrderId: createdOrder.id,
-                        referredRewardType: PrismaRewardType.DISCOUNT_PERCENT,
-                        referredRewardValue: 10,
-                        referredRewardStatus: PrismaRewardStatus.REDEEMED,
-                        referredRedeemedAt: new Date(),
-                        referrerRewardType: PrismaRewardType.DISCOUNT_PERCENT,
-                        referrerRewardValue: 10,
-                        referrerRewardStatus: PrismaRewardStatus.CREDITED,
+            if (referralRecord) {
+                const isSelf = referralRecord.referrerId === customer.id
+                // Flow 01 Rule: Referral discount is for first-time patron commissions only
+                const priorOrdersCount = await prisma.order.count({
+                    where: {
+                        customerId: customer.id,
+                        id: { not: createdOrder.id },
                     },
                 })
+
+                if (!isSelf && priorOrdersCount === 0) {
+                    // Link conversion
+                    await prisma.referral.update({
+                        where: { id: referralRecord.id },
+                        data: {
+                            referredCustomerId: customer.id,
+                            convertedOrderId: createdOrder.id,
+                            referredRewardType: PrismaRewardType.DISCOUNT_PERCENT,
+                            referredRewardValue: 10,
+                            referredRewardStatus: PrismaRewardStatus.REDEEMED,
+                            referredRedeemedAt: new Date(),
+                            referrerRewardType: PrismaRewardType.DISCOUNT_PERCENT,
+                            referrerRewardValue: 10,
+                            referrerRewardStatus: PrismaRewardStatus.CREDITED,
+                        },
+                    })
+
+                    // Flow 01 Rule: Spawns fresh unassigned referral token for the referrer's next share
+                    const nextToken = await generateUniqueToken(referralRecord.referrer.firstName, referralRecord.referrerId)
+                    await prisma.referral.create({
+                        data: {
+                            referrerId: referralRecord.referrerId,
+                            token: nextToken,
+                            referrerRewardType: PrismaRewardType.DISCOUNT_PERCENT,
+                            referrerRewardValue: 10,
+                            referrerRewardStatus: PrismaRewardStatus.PENDING,
+                        },
+                    })
+                }
             }
         }
 
@@ -745,6 +1144,33 @@ export async function createPublicOrderAction(input: CreatePublicOrderInput): Pr
         } catch {
             // Ignored outside Next.js request context
         }
+
+        // Send order confirmation emails to customer and admin
+        sendOrderConfirmationEmails({
+            id: createdOrder.id,
+            orderNumber: createdOrder.orderNumber,
+            customerName: input.fullName,
+            customerEmail: input.email || undefined,
+            customerPhone: input.phone,
+            deliveryAddress: fullAddress,
+            deliveryLocation: deliveryLocation,
+            designName: input.designName,
+            fabric: input.fabric,
+            colour: input.colour,
+            sizingMode: input.sizingMode,
+            measurementsSummary:
+                input.sizingMode === 'bespoke' && input.measurements
+                    ? Object.entries(input.measurements)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(', ')
+                    : `Standard Size: ${input.standardSize || 'Custom'}`,
+            currency: input.currency,
+            totalAmount: input.totalAmount,
+            depositAmount,
+            balanceAmount,
+            deadline: input.deadline,
+            occasion: input.occasion,
+        }).catch((err) => console.warn('[Public Order Email] Dispatch error:', err))
 
         return {
             success: true,

@@ -23,7 +23,7 @@ export async function generateMetadata({
   const { slug } = await params
   const design = await getDesignBySlug(slug)
 
-  if (!design) {
+  if (!design || !design.isVisible) {
     return {
       title: 'Design Not Found — CaptainStitches Lookbook',
     }
@@ -48,7 +48,7 @@ export default async function DesignDetailPage({
   const { slug } = await params
   const dbDesign = await getDesignBySlug(slug)
 
-  if (!dbDesign) {
+  if (!dbDesign || !dbDesign.isVisible) {
     notFound()
   }
 

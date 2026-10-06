@@ -1,7 +1,10 @@
 import Link from 'next/link'
 import StarRating from '@/utils/starRating'
 
-const testimonials = [
+import { prisma } from '@/lib/prisma'
+import { ReviewStatus } from '@prisma/client'
+
+const defaultTestimonials = [
   {
     name: 'Adewale O.',
     location: 'Verona, Italy 🇮🇹',
@@ -28,7 +31,47 @@ const testimonials = [
   },
 ]
 
-const Testimonials = () => {
+export async function getApprovedHomepageTestimonials() {
+  try {
+    const dbReviews = await prisma.review.findMany({
+      where: {
+        status: ReviewStatus.APPROVED,
+        rating: 5,
+      },
+      include: {
+        customer: true,
+        order: true,
+        design: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+    })
+
+    if (dbReviews && dbReviews.length > 0) {
+      const live = dbReviews.map((r) => {
+        const first = r.customer?.firstName || 'Valued'
+        const lastInitial = r.customer?.lastName?.[0] ? `${r.customer.lastName[0]}.` : ''
+        const locationStr = r.customer?.deliveryLocation === 'ITALY' ? 'Italy 🇮🇹' : 'Nigeria 🇳🇬'
+        return {
+          name: `${first} ${lastInitial}`.trim(),
+          location: locationStr,
+          rating: r.rating,
+          event: r.order?.occasion || r.design?.nameEN || 'Bespoke Commission',
+          text: r.comment || 'Exceptional craftsmanship and attention to detail. Fits impeccably.',
+          initials: `${first[0] || 'C'}${r.customer?.lastName?.[0] || 'S'}`.toUpperCase(),
+        }
+      })
+      const remaining = defaultTestimonials.filter((d) => !live.some((l) => l.name === d.name))
+      return [...live, ...remaining].slice(0, 3)
+    }
+  } catch (err) {
+    console.error('[Testimonials] Error querying approved reviews:', err)
+  }
+  return defaultTestimonials
+}
+
+const Testimonials = async () => {
+  const testimonials = await getApprovedHomepageTestimonials()
   return (
     <section
       className="bg-[#071A14] text-cream-100 relative overflow-hidden"

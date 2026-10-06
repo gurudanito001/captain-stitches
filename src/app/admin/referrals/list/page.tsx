@@ -13,6 +13,7 @@ import {
 import {
     getAllReferralsAdminAction,
     redeemReferralRewardAdminAction,
+    issueManualRewardAdminAction,
 } from '@/lib/actions/referrals'
 
 type FilterRewardStatus = 'all' | 'pending' | 'credited' | 'redeemed'
@@ -155,7 +156,11 @@ export default function AdminReferralsListPage() {
 
         // Try updating in PostgreSQL
         try {
-            await redeemReferralRewardAdminAction(redeemModal.referralId, redeemModal.target)
+            await redeemReferralRewardAdminAction(
+                redeemModal.referralId,
+                redeemModal.target,
+                redeemModal.orderAppliedNumber.trim()
+            )
         } catch (e) {
             console.warn('DB update failed, updating UI state:', e)
         }
@@ -204,10 +209,22 @@ export default function AdminReferralsListPage() {
     }
 
     // Handle Manual Issuance Confirm
-    const handleConfirmManualIssue = () => {
+    const handleConfirmManualIssue = async () => {
         if (!manualModal.reason.trim()) {
             alert('Please provide a reason or internal note for this manual reward.')
             return
+        }
+
+        try {
+            await issueManualRewardAdminAction({
+                customerId: manualModal.customerId,
+                customerName: manualModal.customerName,
+                rewardType: manualModal.rewardType,
+                rewardValue: manualModal.rewardValue,
+                reason: manualModal.reason.trim(),
+            })
+        } catch (e) {
+            console.warn('DB manual issue error:', e)
         }
 
         const updated = issueRewardManually(

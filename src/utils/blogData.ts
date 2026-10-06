@@ -12,6 +12,24 @@ export interface BlogPost {
 
 export const BLOG_POSTS: BlogPost[] = [
   {
+    title: "The Modern Agbada in Europe: A Gentleman's Guide to Diaspora Weddings",
+    category: 'Style Guide',
+    date: 'Jun 5, 2026',
+    readTime: '5 min read',
+    excerpt:
+      'Discover how to style traditional Nigerian Agbada in Italy and Europe with bespoke cashmere tailoring by CaptainStitches.',
+    slug: 'the-modern-agbada-in-europe',
+    image: '/images/blog-bespoke.jpg',
+    tags: ['Agbada', 'Bespoke', 'Diaspora Wedding', 'Style Guide', 'Italy'],
+    content: [
+      'In the realm of traditional Nigerian fashion, fit is not just a preference — it is the entire statement. Whether it is a grand Agbada, a sleek Senator set, or a Kaftan, these garments are culturally designed to drape, flow, and align precisely with the wearer’s body.',
+      'Wearing an Agbada in Rome, Milan, or Verona carries immense cultural pride. However, European climates and architectural settings demand thoughtful adaptations in fabric choice and tailoring cut. Traditional heavy jacquards can overheat in indoor Mediterranean ballrooms, which is why our Verona atelier crafts modern Agbadas from breathable high-twist Italian wool and refined cashmere-cottons.',
+      '"A bespoke Agbada must command the room without restricting the gentleman wearing it. Seam balance across the shoulders determines whether the cloth flies or drapes." — Master Tailor Samuelson',
+      'When styling for European ceremonies, three rules stand above all: first, ensure the winged shoulder drape falls cleanly at the wrist-point; second, opt for a tailored split-mandarin buba collar that rests flush without bunching; and third, finish with hand-burnished Italian footwear.',
+      'Ready to craft your bespoke wedding piece? Explore our collection or book a commission.',
+    ],
+  },
+  {
     title: 'Why Bespoke Beats Ready-to-Wear for Nigerian Occasions',
     category: 'Style Guide',
     date: 'Jun 1, 2026',

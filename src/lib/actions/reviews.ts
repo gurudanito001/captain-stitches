@@ -5,6 +5,69 @@ import { prisma } from '@/lib/prisma'
 import { ReviewStatus as PrismaReviewStatus, OrderStatus as PrismaOrderStatus } from '@prisma/client'
 import type { AdminReviewItem, ReviewStatus } from '@/data/adminReviewsData'
 
+function safeRevalidatePath(path: string) {
+    try {
+        revalidatePath(path)
+    } catch {
+        // Ignored outside Next.js request context
+    }
+}
+
+export function mapDbReviewToAdminItem(r: any): AdminReviewItem {
+    const customer = r.customer
+    const primaryPhoto = r.design?.photos?.find((p: any) => p.isPrimary)?.url || r.design?.photos?.[0]?.url || '/images/design-agbada.jpg'
+    const dateObj = new Date(r.createdAt)
+
+    return {
+        id: r.id,
+        code: `REV-${r.id.slice(-6).toUpperCase()}`,
+        status: r.status as ReviewStatus,
+        rating: r.rating,
+        comment: r.comment || '',
+        photos: r.photoUrls || [],
+        dateSubmitted: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        timeSubmitted: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        customer: {
+            id: customer?.id || '',
+            name: `${customer?.firstName || ''} ${customer?.lastName || ''}`.trim() || 'Valued Patron',
+            initials: `${customer?.firstName?.[0] || 'C'}${customer?.lastName?.[0] || 'S'}`.toUpperCase(),
+            avatarColor: '#C4975A',
+            location: customer?.deliveryLocation === 'ITALY' ? 'Italy' : 'Nigeria',
+            email: customer?.email || '',
+            phone: customer?.phone || '',
+            totalOrders: 1,
+            previousReviewsCount: 0,
+            previousAverageRating: 5.0,
+        },
+        design: {
+            id: r.design?.id || 'custom-design',
+            slug: r.design?.slug || '',
+            name: r.design?.nameEN || 'Bespoke Order',
+            category: r.design?.category || 'Native Wear',
+            categoryLabel: r.design?.category || 'Native Wear',
+            thumbnail: primaryPhoto,
+            priceNGN: r.design?.priceNGN || 0,
+            priceEUR: r.design?.priceEUR || 0,
+        },
+        order: {
+            id: r.order?.id || '',
+            orderNumber: r.order?.orderNumber || 'CS-COMMISSION',
+            orderDate: r.order?.createdAt ? new Date(r.order.createdAt).toISOString().slice(0, 10) : '2026-08-01',
+            fabric: r.order?.fabricChoice || 'Bespoke Fabric',
+            colour: r.order?.colourChoice || 'Bespoke Colour',
+            tailorName: 'Samuelson Anaele',
+            deliveryDate: r.order?.estimatedDelivery ? new Date(r.order.estimatedDelivery).toISOString().slice(0, 10) : 'Delivered',
+        },
+        moderation: {
+            moderatorName: r.moderatedById ? 'Samuelson' : undefined,
+            moderatedAt: r.moderatedAt ? new Date(r.moderatedAt).toISOString() : undefined,
+            moderatorNote: r.moderatorNote || undefined,
+            rejectionReason: r.status === 'REJECTED' ? (r.moderatorNote || 'Spam / promotional content') : undefined,
+            isFlagged: false,
+        },
+    }
+}
+
 export interface CreateReviewActionInput {
     customerId: string
     orderId: string
@@ -37,10 +100,12 @@ export async function createReviewAction(input: CreateReviewActionInput): Promis
             },
         })
 
-        revalidatePath('/admin')
-        revalidatePath('/admin/reviews')
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/admin/reviews')
+        safeRevalidatePath('/')
+        safeRevalidatePath('/catalogue')
         if (created.design?.slug) {
-            revalidatePath(`/catalogue/${created.design.slug}`)
+            safeRevalidatePath(`/catalogue/${created.design.slug}`)
         }
 
         return { success: true }
@@ -67,59 +132,7 @@ export async function getAllReviewsAdminAction(): Promise<{
             orderBy: { createdAt: 'desc' },
         })
 
-        const mapped: AdminReviewItem[] = dbReviews.map((r) => {
-            const customer = r.customer
-            const primaryPhoto = r.design?.photos?.find((p) => p.isPrimary)?.url || r.design?.photos?.[0]?.url || '/images/design-agbada.jpg'
-            const dateObj = new Date(r.createdAt)
-
-            return {
-                id: r.id,
-                code: `REV-${r.id.slice(-6).toUpperCase()}`,
-                status: r.status as ReviewStatus,
-                rating: r.rating,
-                comment: r.comment || '',
-                photos: r.photoUrls,
-                dateSubmitted: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                timeSubmitted: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                customer: {
-                    id: customer.id,
-                    name: `${customer.firstName} ${customer.lastName}`.trim(),
-                    initials: `${customer.firstName[0] || ''}${customer.lastName[0] || ''}`.toUpperCase(),
-                    avatarColor: '#C4975A',
-                    location: customer.deliveryLocation === 'ITALY' ? 'Italy' : 'Nigeria',
-                    email: customer.email || '',
-                    phone: customer.phone,
-                    totalOrders: 1,
-                    previousReviewsCount: 0,
-                    previousAverageRating: 5.0,
-                },
-                design: {
-                    id: r.design?.id || 'custom-design',
-                    slug: r.design?.slug || '',
-                    name: r.design?.nameEN || 'Bespoke Order',
-                    category: r.design?.category || 'Native Wear',
-                    categoryLabel: r.design?.category || 'Native Wear',
-                    thumbnail: primaryPhoto,
-                    priceNGN: r.design?.priceNGN || 0,
-                    priceEUR: r.design?.priceEUR || 0,
-                },
-                order: {
-                    id: r.order.id,
-                    orderNumber: r.order.orderNumber,
-                    orderDate: r.order.createdAt.toISOString().slice(0, 10),
-                    fabric: r.order.fabricChoice || 'Bespoke Fabric',
-                    colour: r.order.colourChoice || 'Bespoke Colour',
-                    tailorName: 'Samuelson Anaele',
-                    deliveryDate: r.order.estimatedDelivery ? r.order.estimatedDelivery.toISOString().slice(0, 10) : 'Delivered',
-                },
-                moderation: {
-                    moderatorName: r.moderatedById ? 'Samuelson' : undefined,
-                    moderatedAt: r.moderatedAt ? r.moderatedAt.toISOString() : undefined,
-                    moderatorNote: r.moderatorNote || undefined,
-                    isFlagged: false,
-                },
-            }
-        })
+        const mapped: AdminReviewItem[] = dbReviews.map((r) => mapDbReviewToAdminItem(r))
 
         return { success: true, reviews: mapped }
     } catch (error: any) {
@@ -128,34 +141,90 @@ export async function getAllReviewsAdminAction(): Promise<{
     }
 }
 
+export async function getReviewByIdAdminAction(id: string): Promise<{
+    success: boolean
+    review?: AdminReviewItem
+    error?: string
+}> {
+    try {
+        const cleanId = (id || '').trim()
+        if (!cleanId) {
+            return { success: false, error: 'Review ID is required.' }
+        }
+
+        const dbReview = await prisma.review.findFirst({
+            where: {
+                OR: [
+                    { id: cleanId },
+                    { order: { orderNumber: { equals: cleanId, mode: 'insensitive' } } },
+                ],
+            },
+            include: {
+                customer: true,
+                design: {
+                    include: { photos: true },
+                },
+                order: true,
+            },
+        })
+
+        if (!dbReview) {
+            return { success: false, error: `Review "${cleanId}" not found in database records.` }
+        }
+
+        return { success: true, review: mapDbReviewToAdminItem(dbReview) }
+    } catch (error: any) {
+        console.error('Failed to get review by ID:', error)
+        return { success: false, error: error.message }
+    }
+}
+
 export async function updateReviewStatusAdminAction(
     id: string,
     status: ReviewStatus,
     reason?: string,
     note?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; review?: AdminReviewItem; error?: string }> {
     try {
+        const cleanId = (id || '').trim()
+        if (!cleanId) {
+            return { success: false, error: 'Review ID is required.' }
+        }
+
+        const existing = await prisma.review.findUnique({ where: { id: cleanId } })
+        if (!existing) {
+            return { success: false, error: `Review "${cleanId}" not found in database records.` }
+        }
+
         const prismaStatus = status as PrismaReviewStatus
 
         const updated = await prisma.review.update({
-            where: { id },
+            where: { id: cleanId },
             data: {
                 status: prismaStatus,
                 moderatedAt: new Date(),
                 moderatorNote: note || reason || null,
             },
             include: {
-                design: true,
+                customer: true,
+                design: {
+                    include: { photos: true },
+                },
+                order: true,
             },
         })
 
-        revalidatePath('/admin')
-        revalidatePath('/admin/reviews')
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/admin/reviews')
+        safeRevalidatePath('/')
+        safeRevalidatePath('/catalogue')
         if (updated.design?.slug) {
-            revalidatePath(`/catalogue/${updated.design.slug}`)
+            safeRevalidatePath(`/catalogue/${updated.design.slug}`)
         }
+        safeRevalidatePath('/track')
+        safeRevalidatePath('/review')
 
-        return { success: true }
+        return { success: true, review: mapDbReviewToAdminItem(updated) }
     } catch (error: any) {
         console.error('Failed to update review status in database:', error)
         return { success: false, error: error.message }
@@ -205,10 +274,10 @@ export async function getReviewableOrderAction(rawQuery: string): Promise<{
         const dbOrder = await prisma.order.findFirst({
             where: {
                 OR: [
-                    { orderNumber: { equals: upperQuery, mode: 'insensitive' } },
-                    { orderNumber: { equals: query, mode: 'insensitive' } },
+                    { orderNumber: { equals: upperQuery, mode: 'insensitive' as const } },
+                    { orderNumber: { equals: query, mode: 'insensitive' as const } },
                     { id: query },
-                    { customer: { email: { equals: query, mode: 'insensitive' } } },
+                    { customer: { email: { equals: query, mode: 'insensitive' as const } } },
                     ...(cleanDigits.length >= 7
                         ? [
                               { customer: { phone: { contains: cleanDigits } } },
@@ -217,6 +286,7 @@ export async function getReviewableOrderAction(rawQuery: string): Promise<{
                         : []),
                 ],
             },
+            orderBy: { createdAt: 'desc' },
             include: {
                 customer: true,
                 design: {
@@ -347,12 +417,14 @@ export async function submitCustomerReviewAction(input: SubmitCustomerReviewInpu
             },
         })
 
-        revalidatePath('/admin')
-        revalidatePath('/admin/reviews')
-        revalidatePath('/track')
-        revalidatePath('/review')
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/admin/reviews')
+        safeRevalidatePath('/track')
+        safeRevalidatePath('/review')
+        safeRevalidatePath('/')
+        safeRevalidatePath('/catalogue')
         if (created.design?.slug) {
-            revalidatePath(`/catalogue/${created.design.slug}`)
+            safeRevalidatePath(`/catalogue/${created.design.slug}`)
         }
 
         return { success: true, reviewId: created.id }
@@ -430,12 +502,14 @@ export async function updateCustomerReviewAction(input: UpdateCustomerReviewInpu
             },
         })
 
-        revalidatePath('/admin')
-        revalidatePath('/admin/reviews')
-        revalidatePath('/track')
-        revalidatePath('/review')
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/admin/reviews')
+        safeRevalidatePath('/track')
+        safeRevalidatePath('/review')
+        safeRevalidatePath('/')
+        safeRevalidatePath('/catalogue')
         if (updated.design?.slug) {
-            revalidatePath(`/catalogue/${updated.design.slug}`)
+            safeRevalidatePath(`/catalogue/${updated.design.slug}`)
         }
 
         return { success: true, reviewId: updated.id }

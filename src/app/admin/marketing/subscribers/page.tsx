@@ -14,6 +14,7 @@ import {
     getAllSegments,
     MarketingSegment,
 } from '@/data/adminMarketingData'
+import { getAllSubscribersAdminAction } from '@/lib/actions/newsletter'
 
 export default function SubscriberListPage() {
     const [subscribers, setSubscribers] = useState<MarketingSubscriber[]>([])
@@ -41,8 +42,19 @@ export default function SubscriberListPage() {
     const [toastMessage, setToastMessage] = useState<string | null>(null)
 
     useEffect(() => {
-        setSubscribers(getAllSubscribers())
+        const local = getAllSubscribers()
+        setSubscribers(local)
         setSegments(getAllSegments())
+
+        // Fetch live PostgreSQL database subscribers
+        getAllSubscribersAdminAction().then((res) => {
+            if (res.success && res.subscribers) {
+                const existingEmails = new Set(res.subscribers.map((s) => s.email.toLowerCase()))
+                const nonDupLocal = local.filter((s) => !existingEmails.has(s.email.toLowerCase()))
+                const combined = [...res.subscribers, ...nonDupLocal]
+                setSubscribers(combined)
+            }
+        })
     }, [])
 
     const showToast = (msg: string) => {

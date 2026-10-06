@@ -26,6 +26,43 @@ const STATUS_STEPS: {
 
 // Fallback static sample orders for instant testing and demonstration
 const STATIC_FALLBACK_ORDERS: Record<string, TrackedOrder> = {
+  'CS-0092': {
+    id: 'CS-0092',
+    orderNumber: 'CS-0092',
+    dbId: 'static-0092',
+    customer: 'Daniel N.',
+    customerFullName: 'Daniel Nwokocha',
+    phone: '+2348140715723',
+    design: 'Teal Green 3-Piece Agbada with Gold Filigree',
+    fabric: 'Presidential Cashmere',
+    color: 'Teal Green',
+    estimatedDelivery: '2026-10-01',
+    occasion: 'Brother Wedding (Groom Attire)',
+    status: 'Delivered',
+    deliveryLocation: 'Nigeria',
+    deliveryAddress: 'Plot 12, Admiralty Way, Lekki Phase 1, Lagos, Nigeria',
+    totalEUR: 150,
+    totalNGN: 220000,
+    depositAmount: 110000,
+    depositPaid: true,
+    balanceAmount: 110000,
+    balancePaid: true,
+    primaryImage: '/images/design-agbada.jpg',
+    inspectionMedia: {
+      photos: ['/images/design-agbada.jpg'],
+      videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
+      notes: 'Gold metallic filigree embroidery verified. Seam allowances checked for comfort.',
+    },
+    timeline: [
+      { status: 'New', date: '2026-09-15T10:00:00Z', notes: 'Commission logged online by Daniel Nwokocha.', actor: 'Client Portal' },
+      { status: 'Confirmed', date: '2026-09-16T12:00:00Z', notes: '50% deposit confirmed.', actor: 'Paystack Gateway' },
+      { status: 'In production', date: '2026-09-18T08:00:00Z', notes: 'Cashmere chalking and gold metallic embroidery in progress.', actor: 'Nigeria Workshop' },
+      { status: 'Inspection', date: '2026-09-25T16:00:00Z', notes: 'HD inspection photos and video uploaded.', actor: 'Quality Lead' },
+      { status: 'Approved', date: '2026-09-26T09:00:00Z', notes: 'Approved by Master Tailor Samuelson. Balance paid.', actor: 'Samuelson Anaele' },
+      { status: 'Dispatched', date: '2026-09-28T14:00:00Z', notes: 'Air freight tracking DHL-NG-88992211 active.', actor: 'DHL Express' },
+      { status: 'Delivered', date: '2026-10-01T15:30:00Z', notes: 'Package successfully delivered and received in Lekki, Lagos.', actor: 'DHL Courier' },
+    ],
+  },
   'CS-783210': {
     id: 'CS-783210',
     dbId: 'static-1',
@@ -509,6 +546,48 @@ function TrackingContent() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Courier Tracking Banner (Dispatched or Delivered) */}
+                  {(trackedOrder.status === 'Dispatched' || trackedOrder.trackingNumber) && (
+                    <div
+                      className="rounded-3xl border border-[#3B82F6]/40 bg-gradient-to-r from-[#0F1E36]/90 via-[#0B1526]/90 to-[#071A14]/90 p-6 sm:p-7 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-[#1D4ED8]/20 border border-[#3B82F6]/30 flex items-center justify-center text-2xl shrink-0">
+                          📦
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="inline-block w-2 h-2 rounded-full bg-[#3B82F6] animate-pulse" />
+                            <span className="text-[10px] text-[#93C5FD] uppercase tracking-widest font-bold">
+                              Courier Waybill &amp; Real-Time Dispatch
+                            </span>
+                          </div>
+                          <h4 className="font-serif text-lg font-bold text-cream-100">
+                            Carrier: {trackedOrder.courierName || 'DHL Express'}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-stone-300">Tracking Code:</span>
+                            <span className="font-mono text-sm font-bold text-[#E8D4B0] bg-black/50 px-2.5 py-0.5 rounded-lg border border-stone-800">
+                              {trackedOrder.trackingNumber || 'Pending Courier Pickup'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {trackedOrder.trackingUrl && (
+                        <a
+                          href={trackedOrder.trackingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1D4ED8] hover:bg-[#2563EB] text-white text-xs font-bold transition-all shadow-lg shrink-0"
+                        >
+                          <span>Track on {trackedOrder.courierName || 'DHL'}</span>
+                          <span>↗</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
 
                   {/* Garment Showcase Card */}
                   <div

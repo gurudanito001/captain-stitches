@@ -11,6 +11,7 @@ import {
     unflagReview,
     updateModeratorNote,
 } from '@/data/adminReviewsData'
+import { getReviewByIdAdminAction, updateReviewStatusAdminAction } from '@/lib/actions/reviews'
 
 export default function AdminReviewDetailPage() {
     const params = useParams()
@@ -36,14 +37,36 @@ export default function AdminReviewDetailPage() {
 
     useEffect(() => {
         if (!reviewId) return
-        const found = getReviewById(reviewId)
-        if (found) {
-            setReview(found)
-            setInternalNote(found.moderation.moderatorNote || '')
-            setFlagNote(found.moderation.flagNote || '')
-            setRejectionReason(found.moderation.rejectionReason || '')
+        let isMounted = true
+
+        const fetchReview = async () => {
+            const found = getReviewById(reviewId)
+            if (found && isMounted) {
+                setReview(found)
+                setInternalNote(found.moderation.moderatorNote || '')
+                setFlagNote(found.moderation.flagNote || '')
+                setRejectionReason(found.moderation.rejectionReason || '')
+            }
+
+            try {
+                const dbRes = await getReviewByIdAdminAction(reviewId)
+                if (dbRes.success && dbRes.review && isMounted) {
+                    setReview(dbRes.review)
+                    setInternalNote(dbRes.review.moderation.moderatorNote || '')
+                    setFlagNote(dbRes.review.moderation.flagNote || '')
+                    setRejectionReason(dbRes.review.moderation.rejectionReason || '')
+                }
+            } catch (e) {
+                // Retain local if db not accessible
+            } finally {
+                if (isMounted) setIsLoading(false)
+            }
         }
-        setIsLoading(false)
+
+        fetchReview()
+        return () => {
+            isMounted = false
+        }
     }, [reviewId])
 
     const showToast = (msg: string) => {
@@ -51,15 +74,19 @@ export default function AdminReviewDetailPage() {
         setTimeout(() => setToastMessage(null), 3200)
     }
 
-    const handleApprove = () => {
+    const handleApprove = async () => {
         if (!review) return
         const updatedList = updateReviewStatus(review.id, 'APPROVED')
         const current = updatedList.find((r) => r.id === review.id)
         if (current) setReview(current)
         showToast('Review approved & published to public storefront!')
+        await updateReviewStatusAdminAction(review.id, 'APPROVED').catch(console.error)
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
     }
 
-    const handleConfirmReject = () => {
+    const handleConfirmReject = async () => {
         if (!review) return
         if (!rejectionReason.trim()) {
             alert('Please specify a rejection reason.')
@@ -70,6 +97,10 @@ export default function AdminReviewDetailPage() {
         if (current) setReview(current)
         setIsRejectModalOpen(false)
         showToast('Review marked as Rejected.')
+        await updateReviewStatusAdminAction(review.id, 'REJECTED', rejectionReason.trim()).catch(console.error)
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('admin-counts-update'))
+        }
     }
 
     const handleConfirmFlag = () => {
@@ -88,12 +119,13 @@ export default function AdminReviewDetailPage() {
         setIsFlagModalOpen(false)
     }
 
-    const handleSaveNote = () => {
+    const handleSaveNote = async () => {
         if (!review) return
         setIsSavingNote(true)
         const updatedList = updateModeratorNote(review.id, internalNote.trim())
         const current = updatedList.find((r) => r.id === review.id)
         if (current) setReview(current)
+        await updateReviewStatusAdminAction(review.id, review.status, undefined, internalNote.trim()).catch(console.error)
         setIsSavingNote(false)
         showToast('Internal moderator note updated.')
     }

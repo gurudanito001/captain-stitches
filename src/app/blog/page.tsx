@@ -7,25 +7,48 @@ import { Navbar } from '@/components/layout/Navbar'
 import { Footer } from '@/components/layout/Footer'
 import { Button } from '@/components/ui/Button'
 import SectionEyebrow from '@/utils/sectionEyeBrow'
-import { BLOG_POSTS } from '@/utils/blogData'
+import { BLOG_POSTS, BlogPost } from '@/utils/blogData'
+import { getAllBlogPosts } from '@/data/adminBlogData'
 
 const CATEGORIES = ['All Journal', 'Style Guide', 'Case Study', 'Design Opinions']
 
 export default function BlogListingPage() {
   const [activeFilter, setActiveFilter] = useState('All Journal')
 
+  const allPosts = useMemo(() => {
+    const adminPosts = getAllBlogPosts()
+    const publishedAdmin = adminPosts
+      .filter((p) => p.status === 'published')
+      .map((p) => ({
+        title: p.contentEN.title,
+        category: p.category,
+        date: p.publishDate !== 'Draft' ? p.publishDate : 'Recent',
+        readTime: `${Math.max(1, Math.ceil(p.contentEN.body.split(/\s+/).length / 200))} min read`,
+        excerpt: p.contentEN.excerpt,
+        slug: p.slug,
+        image: p.featuredImage || '/images/blog-bespoke.jpg',
+        tags: p.contentEN.tags,
+        content: p.contentEN.body.split('\n\n').filter(Boolean),
+      }))
+
+    const map = new Map<string, BlogPost>()
+    BLOG_POSTS.forEach((p) => map.set(p.slug, p))
+    publishedAdmin.forEach((p) => map.set(p.slug, p))
+    return Array.from(map.values())
+  }, [])
+
   // Featured Post - select the first post by default
-  const featuredPost = useMemo(() => BLOG_POSTS[0], [])
+  const featuredPost = useMemo(() => allPosts[0], [allPosts])
 
   // Filtered posts (excluding the featured one, unless category filter is selected which shows all matching)
   const filteredPosts = useMemo(() => {
-    return BLOG_POSTS.filter(post => {
+    return allPosts.filter((post) => {
       if (activeFilter === 'All Journal') {
         return post.slug !== featuredPost.slug
       }
       return post.category.toLowerCase() === activeFilter.toLowerCase()
     })
-  }, [activeFilter, featuredPost])
+  }, [activeFilter, featuredPost, allPosts])
 
   return (
     <>
