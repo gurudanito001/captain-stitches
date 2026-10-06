@@ -13,7 +13,7 @@ function safeRevalidatePath(path: string) {
     }
 }
 
-export function mapDbReviewToAdminItem(r: any): AdminReviewItem {
+function mapDbReviewToAdminItem(r: any): AdminReviewItem {
     const customer = r.customer
     const primaryPhoto = r.design?.photos?.find((p: any) => p.isPrimary)?.url || r.design?.photos?.[0]?.url || '/images/design-agbada.jpg'
     const dateObj = new Date(r.createdAt)

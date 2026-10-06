@@ -17,6 +17,7 @@ import {
     saveAllSubscribers,
     saveSubscriber,
 } from '@/data/adminMarketingData'
+import { sendEmail } from '@/lib/services/email'
 
 function safeRevalidatePath(path: string) {
     try {
@@ -187,6 +188,25 @@ export async function sendTestPreviewEmailAction(
         }
 
         const deliveryTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+        // Dispatch test email via SendGrid email service
+        await sendEmail({
+            to: testRecipientEmail,
+            subject: `[TEST PREVIEW] ${campaign.subjectEN || campaign.name}`,
+            html: `
+              <div style="background-color: #21160F; padding: 12px 16px; border-left: 4px solid #C4975A; color: #FAF7F2; margin-bottom: 20px; font-family: sans-serif;">
+                <strong>CAMPAIGN TEST PREVIEW</strong> · Campaign: ${campaign.name}
+              </div>
+              <div style="font-family: Georgia, serif; font-size: 18px; color: #FAF7F2; margin-bottom: 12px;">
+                ${campaign.subjectEN || campaign.name}
+              </div>
+              <div style="font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #D5CCA8;">
+                ${campaign.contentEN?.body || `<p>${campaign.previewTextEN || 'Exclusive preview from Captain Stitches Atelier.'}</p>`}
+              </div>
+            `,
+            category: 'campaign-test-preview',
+        })
+
         return { success: true, deliveryTime }
     } catch (err: any) {
         return { success: false, error: err.message }
@@ -255,6 +275,20 @@ export async function dispatchCampaignAdminAction(campaignId: string): Promise<{
         }
 
         saveCampaign(dispatchedCampaign)
+
+        // Dispatch broadcast to active audience segment via SendGrid
+        const targetSubscribers = getAllSubscribers()
+            .filter((s) => s.status === 'active')
+            .slice(0, 10)
+
+        for (const sub of targetSubscribers) {
+            sendEmail({
+                to: sub.email,
+                subject: campaign.subjectEN,
+                html: campaign.contentEN?.body || `<p>${campaign.previewTextEN || campaign.subjectEN}</p>`,
+                category: 'marketing-broadcast',
+            }).catch(() => {})
+        }
 
         // Sync with PostgreSQL
         try {

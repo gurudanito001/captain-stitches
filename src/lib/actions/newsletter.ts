@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { Language, SubscriberStatus } from '@prisma/client'
+import { sendNewsletterWelcomeEmail } from '@/lib/services/email'
 import type { MarketingSubscriber } from '@/data/adminMarketingData'
 
 export interface SubscribeNewsletterInput {
@@ -115,6 +116,11 @@ export async function subscribeNewsletterAction(input: SubscribeNewsletterInput)
         } catch {
             // Ignore outside Next.js request context
         }
+
+        // Dispatch welcome email with ROYALTY10 privilege code
+        sendNewsletterWelcomeEmail(cleanEmail).catch((err) =>
+            console.warn('[Newsletter] Welcome email dispatch note:', err)
+        )
 
         return {
             success: true,

@@ -13,6 +13,7 @@ import {
   updateCustomerReviewAction,
   ReviewableOrderDetails,
 } from '@/lib/actions/reviews'
+import { uploadMediaAction } from '@/lib/actions/upload'
 
 const FIT_TAGS = [
   'True to measurements',
@@ -64,6 +65,7 @@ function ReviewPageContent() {
   const [photoInputUrl, setPhotoInputUrl] = useState('')
   const [showPhotoUrlInput, setShowPhotoUrlInput] = useState(false)
   const [consentGranted, setConsentGranted] = useState(true)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -174,20 +176,43 @@ function ReviewPageContent() {
     }
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
 
-    // Convert up to 3 files to data URLs for instant preview & persistence
-    Array.from(files).slice(0, 3).forEach((file) => {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        if (event.target?.result && typeof event.target.result === 'string') {
-          setPhotoUrls((prev) => [...prev, event.target!.result as string])
+    setIsUploadingPhoto(true)
+    const fileList = Array.from(files).slice(0, 3)
+
+    for (const file of fileList) {
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const res = await uploadMediaAction(formData, 'customer-reviews')
+        if (res.success && res.url) {
+          setPhotoUrls((prev) => [...prev, res.url!])
+        } else {
+          // Fallback to local data URL if needed
+          const reader = new FileReader()
+          reader.onload = (event) => {
+            if (event.target?.result && typeof event.target.result === 'string') {
+              setPhotoUrls((prev) => [...prev, event.target!.result as string])
+            }
+          }
+          reader.readAsDataURL(file)
         }
+      } catch {
+        // Fallback
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          if (event.target?.result && typeof event.target.result === 'string') {
+            setPhotoUrls((prev) => [...prev, event.target!.result as string])
+          }
+        }
+        reader.readAsDataURL(file)
       }
-      reader.readAsDataURL(file)
-    })
+    }
+    setIsUploadingPhoto(false)
+    e.target.value = ''
   }
 
   const handleAddPhotoUrl = () => {
@@ -734,13 +759,24 @@ function ReviewPageContent() {
                         htmlFor="review-photo-upload"
                         className="cursor-pointer flex flex-col items-center gap-2"
                       >
-                        <span className="text-2xl">📸</span>
-                        <span className="text-xs font-semibold text-[#E8D4B0]">
-                          Click to select photos wearing your attire
-                        </span>
-                        <span className="text-[11px] text-stone-500">
-                          PNG, JPG up to 10MB (Up to 3 photos)
-                        </span>
+                        {isUploadingPhoto ? (
+                          <>
+                            <span className="w-5 h-5 border-2 border-[#C4975A] border-t-transparent rounded-full animate-spin" />
+                            <span className="text-xs font-semibold text-[#C4975A]">
+                              Uploading photos to Cloudinary...
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-2xl">📸</span>
+                            <span className="text-xs font-semibold text-[#E8D4B0]">
+                              Click to select photos wearing your attire (Cloudinary)
+                            </span>
+                            <span className="text-[11px] text-stone-500">
+                              PNG, JPG up to 10MB (Up to 3 photos)
+                            </span>
+                          </>
+                        )}
                       </label>
                     </div>
 

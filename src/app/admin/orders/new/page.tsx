@@ -22,6 +22,7 @@ import {
     updateOrder,
 } from '@/data/adminOrdersData'
 import { createOrderAdminAction } from '@/lib/actions/orders'
+import { uploadMediaAction } from '@/lib/actions/upload'
 import { ColourSelector } from '@/components/common/ColourSelector'
 import { parseColour, ATELIER_PALETTE, ColourOption } from '@/lib/utils/colours'
 
@@ -162,6 +163,16 @@ export default function CreateOrderPage() {
             setCustomImageError('Failed to read image file. Please try another image.')
         }
         reader.readAsDataURL(file)
+
+        // Upload to Cloudinary external media repository
+        const formData = new FormData()
+        formData.append('file', file)
+        uploadMediaAction(formData, 'custom-designs').then((res) => {
+            if (res.success && res.url) {
+                setCustomDesign((prev) => ({ ...prev, image: res.url || '' }))
+                setCustomImageName(`${file.name} (${formattedSize} · Cloudinary)`)
+            }
+        }).catch((err) => console.warn('Cloudinary upload error:', err))
     }
 
     const handleApplyCustomImageUrl = (urlToApply?: string) => {

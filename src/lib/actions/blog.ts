@@ -13,6 +13,7 @@ import {
     INITIAL_BLOG_POSTS,
 } from '@/data/adminBlogData'
 import { BLOG_POSTS, BlogPost } from '@/utils/blogData'
+import { generateSlug } from '@/lib/utils/slug'
 
 function safeRevalidatePath(path: string) {
     try {
@@ -23,15 +24,10 @@ function safeRevalidatePath(path: string) {
 }
 
 /**
- * Generate a URL-friendly slug from title.
+ * Async Server Action for generating a slug from a title.
  */
-export function generateSlug(title: string): string {
-    return title
-        .toLowerCase()
-        .trim()
-        .replace(/[^\w\s-]/g, '')
-        .replace(/[\s_-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
+export async function generateSlugAction(title: string): Promise<string> {
+    return generateSlug(title)
 }
 
 /**

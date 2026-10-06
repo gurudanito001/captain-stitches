@@ -244,20 +244,27 @@ export async function sendEmail(params: {
                 sentAt: new Date(),
             })
 
-            // Log notification to Prisma database if orderId is available
+            // Log notification to Prisma database if orderId is available and exists
             if (orderId && notificationType) {
                 try {
-                    await prisma.orderNotification.create({
-                        data: {
-                            orderId,
-                            channel: NotificationChannel.EMAIL,
-                            type: notificationType,
-                            recipient: to,
-                            messageContent: subject,
-                            sentAt: new Date(),
-                            success: true,
-                        },
-                    })
+                    const orderExists = await prisma.order.findUnique({
+                        where: { id: orderId },
+                        select: { id: true },
+                    }).catch(() => null)
+
+                    if (orderExists) {
+                        await prisma.orderNotification.create({
+                            data: {
+                                orderId,
+                                channel: NotificationChannel.EMAIL,
+                                type: notificationType,
+                                recipient: to,
+                                messageContent: subject,
+                                sentAt: new Date(),
+                                success: true,
+                            },
+                        })
+                    }
                 } catch (dbErr) {
                     console.warn('[Email Service] Failed to log order notification in DB:', dbErr)
                 }
@@ -288,17 +295,24 @@ export async function sendEmail(params: {
 
         if (orderId && notificationType) {
             try {
-                await prisma.orderNotification.create({
-                    data: {
-                        orderId,
-                        channel: NotificationChannel.EMAIL,
-                        type: notificationType,
-                        recipient: to,
-                        messageContent: subject,
-                        sentAt: new Date(),
-                        success: true,
-                    },
-                })
+                const orderExists = await prisma.order.findUnique({
+                    where: { id: orderId },
+                    select: { id: true },
+                }).catch(() => null)
+
+                if (orderExists) {
+                    await prisma.orderNotification.create({
+                        data: {
+                            orderId,
+                            channel: NotificationChannel.EMAIL,
+                            type: notificationType,
+                            recipient: to,
+                            messageContent: subject,
+                            sentAt: new Date(),
+                            success: true,
+                        },
+                    })
+                }
             } catch {
                 // Non-blocking in mock mode
             }
@@ -314,18 +328,25 @@ export async function sendEmail(params: {
 
         if (orderId && notificationType) {
             try {
-                await prisma.orderNotification.create({
-                    data: {
-                        orderId,
-                        channel: NotificationChannel.EMAIL,
-                        type: notificationType,
-                        recipient: to,
-                        messageContent: subject,
-                        sentAt: new Date(),
-                        success: false,
-                        error: err.message,
-                    },
-                })
+                const orderExists = await prisma.order.findUnique({
+                    where: { id: orderId },
+                    select: { id: true },
+                }).catch(() => null)
+
+                if (orderExists) {
+                    await prisma.orderNotification.create({
+                        data: {
+                            orderId,
+                            channel: NotificationChannel.EMAIL,
+                            type: notificationType,
+                            recipient: to,
+                            messageContent: subject,
+                            sentAt: new Date(),
+                            success: false,
+                            error: err.message,
+                        },
+                    })
+                }
             } catch {
                 // Ignore
             }

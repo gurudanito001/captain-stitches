@@ -23,8 +23,8 @@ import {
     upsertBlogPostAdminAction,
     publishBlogPostAdminAction,
     deleteBlogPostAdminAction,
-    generateSlug,
 } from '../src/lib/actions/blog'
+import { generateSlug } from '../src/lib/utils/slug'
 import {
     getAllBlogPosts,
     saveBlogPost,

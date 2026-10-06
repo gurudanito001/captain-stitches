@@ -16,6 +16,7 @@ import {
     deleteDesignAction,
     createDesignAction,
 } from '@/lib/actions/catalogue'
+import { uploadMediaAction } from '@/lib/actions/upload'
 import { AdminColourInput } from '@/components/admin/AdminColourInput'
 import { serializeColour, ColourOption } from '@/lib/utils/colours'
 
@@ -101,6 +102,7 @@ export default function DesignDetailEditPage() {
     const [imageCaptionInput, setImageCaptionInput] = useState('')
     const [imageAsCover, setImageAsCover] = useState(false)
     const [photoError, setPhotoError] = useState<string | null>(null)
+    const [isUploadingFile, setIsUploadingFile] = useState(false)
     const imageUrlInputRef = useRef<HTMLInputElement>(null)
 
     // Fabrics & Colours
@@ -251,6 +253,43 @@ export default function DesignDetailEditPage() {
             setImageAsCover(false)
         }
         showToast('Image URL added to gallery')
+    }
+
+    const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setPhotoError(null)
+        setIsUploadingFile(true)
+
+        try {
+            const formData = new FormData()
+            formData.append('file', file)
+            const res = await uploadMediaAction(formData, 'catalogue-products')
+
+            if (res.success && res.url) {
+                const newPhoto: DesignPhoto = {
+                    id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    url: res.url,
+                    isCover: imageAsCover || photos.length === 0,
+                    caption: file.name.replace(/\.[^/.]+$/, ''),
+                }
+
+                if (newPhoto.isCover) {
+                    setPhotos((prev) => [newPhoto, ...prev.map((p) => ({ ...p, isCover: false }))])
+                } else {
+                    setPhotos((prev) => [...prev, newPhoto])
+                }
+                showToast('Photo uploaded to Cloudinary successfully')
+            } else {
+                setPhotoError(res.error || 'Failed to upload photo to Cloudinary')
+            }
+        } catch {
+            setPhotoError('Error uploading file to Cloudinary')
+        } finally {
+            setIsUploadingFile(false)
+            e.target.value = ''
+        }
     }
 
     // Save all changes to database
@@ -743,28 +782,67 @@ export default function DesignDetailEditPage() {
                                     />
                                 </div>
 
-                                <button
-                                    type="button"
-                                    onClick={() => handleAddPhotoUrl()}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.35rem',
-                                        backgroundColor: '#C4975A',
-                                        color: '#FFFFFF',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        padding: '0.6rem 1.15rem',
-                                        fontSize: '0.825rem',
-                                        fontWeight: 700,
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap',
-                                        boxShadow: '0 1px 3px rgba(196,151,90,0.3)',
-                                    }}
-                                >
-                                    <IconPlus />
-                                    <span>Add Image URL</span>
-                                </button>
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleAddPhotoUrl()}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            backgroundColor: '#C4975A',
+                                            color: '#FFFFFF',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            padding: '0.6rem 1.15rem',
+                                            fontSize: '0.825rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                            whiteSpace: 'nowrap',
+                                            boxShadow: '0 1px 3px rgba(196,151,90,0.3)',
+                                        }}
+                                    >
+                                        <IconPlus />
+                                        <span>Add Image URL</span>
+                                    </button>
+
+                                    <label
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.35rem',
+                                            backgroundColor: '#FAF7F2',
+                                            color: '#C4975A',
+                                            border: '1px solid #C4975A',
+                                            borderRadius: '8px',
+                                            padding: '0.6rem 1.15rem',
+                                            fontSize: '0.825rem',
+                                            fontWeight: 700,
+                                            cursor: isUploadingFile ? 'wait' : 'pointer',
+                                            whiteSpace: 'nowrap',
+                                            position: 'relative',
+                                        }}
+                                    >
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            disabled={isUploadingFile}
+                                            onChange={handleUploadFile}
+                                            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+                                        />
+                                        {isUploadingFile ? (
+                                            <>
+                                                <span style={{ width: '12px', height: '12px', border: '2px solid #C4975A', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                <span>Uploading...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <IconUploadCloud />
+                                                <span>Upload File (Cloudinary)</span>
+                                            </>
+                                        )}
+                                    </label>
+                                </div>
                             </div>
 
                             {/* As Cover Checkbox */}

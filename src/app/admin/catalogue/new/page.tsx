@@ -10,6 +10,7 @@ import {
     DesignPhoto,
 } from '@/data/adminCatalogueData'
 import { createDesignAction } from '@/lib/actions/catalogue'
+import { uploadMediaAction } from '@/lib/actions/upload'
 import { AdminColourInput } from '@/components/admin/AdminColourInput'
 import { serializeColour, ColourOption } from '@/lib/utils/colours'
 
@@ -72,6 +73,7 @@ export default function CreateNewDesignPage() {
     const [imageCaptionInput, setImageCaptionInput] = useState('')
     const [imageAsCover, setImageAsCover] = useState(false)
     const [photoError, setPhotoError] = useState<string | null>(null)
+    const [isUploadingFile, setIsUploadingFile] = useState(false)
 
     // Fabrics & Colours
     const [fabrics, setFabrics] = useState<string[]>(['Imperial Cashmere Cotton', 'Royal Guinea Brocade'])
@@ -147,6 +149,41 @@ export default function CreateNewDesignPage() {
             setImageUrlInput('')
             setImageCaptionInput('')
             setImageAsCover(false)
+        }
+    }
+
+    const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return
+        const file = e.target.files[0]
+        setIsUploadingFile(true)
+        setPhotoError(null)
+
+        try {
+            const formData = new FormData()
+            formData.append('file', file)
+            const res = await uploadMediaAction(formData, 'catalogue-products')
+
+            if (res.success && res.url) {
+                const newPhoto: DesignPhoto = {
+                    id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    url: res.url,
+                    isCover: imageAsCover || photos.length === 0,
+                    caption: file.name.replace(/\.[^/.]+$/, ''),
+                }
+
+                if (newPhoto.isCover) {
+                    setPhotos((prev) => [newPhoto, ...prev.map((p) => ({ ...p, isCover: false }))])
+                } else {
+                    setPhotos((prev) => [...prev, newPhoto])
+                }
+            } else {
+                setPhotoError(res.error || 'Failed to upload photo to Cloudinary')
+            }
+        } catch {
+            setPhotoError('Error uploading file to Cloudinary')
+        } finally {
+            setIsUploadingFile(false)
+            e.target.value = ''
         }
     }
 
@@ -416,6 +453,43 @@ export default function CreateNewDesignPage() {
                                 <IconPlus />
                                 <span>Add Image URL</span>
                             </button>
+
+                            <label
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.35rem',
+                                    backgroundColor: '#FAF7F2',
+                                    color: '#C4975A',
+                                    border: '1px solid #C4975A',
+                                    borderRadius: '8px',
+                                    padding: '0.6rem 1.15rem',
+                                    fontSize: '0.825rem',
+                                    fontWeight: 700,
+                                    cursor: isUploadingFile ? 'wait' : 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    position: 'relative',
+                                }}
+                            >
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    disabled={isUploadingFile}
+                                    onChange={handleUploadFile}
+                                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+                                />
+                                {isUploadingFile ? (
+                                    <>
+                                        <span style={{ width: '12px', height: '12px', border: '2px solid #C4975A', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                        <span>Uploading...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <IconUploadCloud />
+                                        <span>Upload File (Cloudinary)</span>
+                                    </>
+                                )}
+                            </label>
                         </div>
 
                         {/* As Cover Checkbox */}

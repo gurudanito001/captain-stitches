@@ -10,6 +10,7 @@ import {
     deleteBlogPost,
     getBlogSettings,
 } from '@/data/adminBlogData'
+import { uploadMediaAction } from '@/lib/actions/upload'
 
 interface AdminBlogEditorProps {
     initialPost: AdminBlogPost
@@ -25,6 +26,7 @@ export function AdminBlogEditor({ initialPost, isNew = false }: AdminBlogEditorP
     const [toastMessage, setToastMessage] = useState<string | null>(null)
     const [isSaving, setIsSaving] = useState(false)
     const [lastSavedTime, setLastSavedTime] = useState(initialPost.lastSaved || 'Not saved yet')
+    const [isUploadingCover, setIsUploadingCover] = useState(false)
 
     // Schedule / Publish Modal
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false)
@@ -47,6 +49,34 @@ export function AdminBlogEditor({ initialPost, isNew = false }: AdminBlogEditorP
     const showToast = (msg: string) => {
         setToastMessage(msg)
         setTimeout(() => setToastMessage(null), 3200)
+    }
+
+    const handleUploadCover = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return
+        const file = e.target.files[0]
+        setIsUploadingCover(true)
+
+        try {
+            const formData = new FormData()
+            formData.append('file', file)
+            const res = await uploadMediaAction(formData, 'blog-editor')
+
+            if (res.success && res.url) {
+                setPost((prev) => ({
+                    ...prev,
+                    featuredImage: res.url!,
+                    featuredImageAlt: prev.featuredImageAlt || file.name.replace(/\.[^/.]+$/, ''),
+                }))
+                showToast(res.isSimulated ? 'Cover image uploaded (Cloudinary simulated)' : 'Cover image uploaded to Cloudinary!')
+            } else {
+                showToast(res.error || 'Failed to upload cover image')
+            }
+        } catch {
+            showToast('Failed to upload image')
+        } finally {
+            setIsUploadingCover(false)
+            e.target.value = ''
+        }
     }
 
     // Auto-generate slug from title if new or slug empty
@@ -934,6 +964,42 @@ export function AdminBlogEditor({ initialPost, isNew = false }: AdminBlogEditorP
                                         boxSizing: 'border-box',
                                     }}
                                 />
+                                <label
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        marginTop: '6px',
+                                        padding: '7px 12px',
+                                        backgroundColor: '#FAF7F2',
+                                        color: '#C4975A',
+                                        border: '1px solid #C4975A',
+                                        borderRadius: '6px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 600,
+                                        cursor: isUploadingCover ? 'wait' : 'pointer',
+                                        position: 'relative',
+                                        width: '100%',
+                                        boxSizing: 'border-box',
+                                    }}
+                                >
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        disabled={isUploadingCover}
+                                        onChange={handleUploadCover}
+                                        style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+                                    />
+                                    {isUploadingCover ? (
+                                        <>
+                                            <span style={{ width: '12px', height: '12px', border: '2px solid #C4975A', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                            <span>Uploading to Cloudinary...</span>
+                                        </>
+                                    ) : (
+                                        <span>📷 Upload Cover Image (Cloudinary)</span>
+                                    )}
+                                </label>
                             </div>
 
                             <div>
